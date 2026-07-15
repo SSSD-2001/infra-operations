@@ -61,6 +61,8 @@ export interface UserInfoInterface {
   employeeThumbnail: string | null;
   jobRole: string;
   privileges: number[];
+  githubUserId?: string | null;
+  githubUsername?: string | null;
 }
 
 const initialState: AuthState = {

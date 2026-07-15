@@ -23,7 +23,7 @@ public type CustomJwtPayload record {
     # User groups
     string[] groups;
     # User id
-    string userid;
+    string? userid = ();
     # Github User ID
     string? githubUserId = ();
 };
