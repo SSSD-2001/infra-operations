@@ -1,0 +1,719 @@
+{
+  "info": {
+    "_postman_id": "3e4aaf18-6f5a-4f26-9ab7-3d0d9a3f8b72",
+    "name": "Infra Portal Backend",
+    "description": "Postman collection for the Ballerina Infra Portal backend. Set `baseUrl` and `jwtAssertion` before running requests. The service expects the JWT in the `x-jwt-assertion` header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-jwt-assertion",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{jwtAssertion}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('response is not a server crash', function () {",
+          "  pm.expect(pm.response.code).to.be.below(500);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8090",
+      "type": "string"
+    },
+    {
+      "key": "jwtAssertion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "employeeEmail",
+      "value": "user@wso2.com",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "organizationId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "organizationName",
+      "value": "wso2",
+      "type": "string"
+    },
+    {
+      "key": "topicId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "leadId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "defaultTeamId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "User and Employees",
+      "item": [
+        {
+          "name": "Get Logged-In User Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user-info",
+              "host": ["{{baseUrl}}"],
+              "path": ["user-info"]
+            },
+            "description": "Fetches the employee record and privilege list for the JWT user."
+          }
+        },
+        {
+          "name": "Get Employee Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employee-info?email={{employeeEmail}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["employee-info"],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "{{employeeEmail}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Employees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employees",
+              "host": ["{{baseUrl}}"],
+              "path": ["employees"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Repository Requests",
+      "item": [
+        {
+          "name": "List Repository Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests?memberEmail=&leadEmail=&approvalState=&limit=10&offset=0&repoName=",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests"],
+              "query": [
+                {
+                  "key": "memberEmail",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "leadEmail",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "approvalState",
+                  "value": "Pending",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "repoName",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Repository Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}"]
+            }
+          }
+        },
+        {
+          "name": "Create Repository Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{employeeEmail}}\",\n  \"leadEmail\": \"lead@wso2.com\",\n  \"requirement\": \"Repository required for a new service.\",\n  \"ccList\": \"team@wso2.com\",\n  \"repoName\": \"sample-service\",\n  \"organizationId\": 1,\n  \"repoType\": \"Service\",\n  \"description\": \"Sample service repository\",\n  \"enableIssues\": \"true\",\n  \"websiteUrl\": \"https://example.com\",\n  \"topics\": \"infra,portal\",\n  \"prProtection\": \"Default\",\n  \"teams\": \"[]\",\n  \"enableTriageWso2All\": \"true\",\n  \"enableTriageWso2AllInterns\": \"false\",\n  \"disableTriageReason\": \"\",\n  \"cicdRequirement\": \"None\",\n  \"jenkinsJobType\": null,\n  \"jenkinsGroupId\": null,\n  \"azureDevopsOrg\": null,\n  \"azureDevopsProject\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests"]
+            }
+          }
+        },
+        {
+          "name": "Update Repository Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{requestId}},\n  \"description\": \"Updated repository description\",\n  \"state\": \"Pending\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}"]
+            }
+          }
+        },
+        {
+          "name": "Approve Repository Request",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Repository Request",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}", "reject"]
+            }
+          }
+        },
+        {
+          "name": "List Repository Request Comments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}", "comments"]
+            }
+          }
+        },
+        {
+          "name": "Add Repository Request Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"authorEmail\": \"{{employeeEmail}}\",\n  \"commentText\": \"Looks good to me.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repository-requests/{{requestId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["repository-requests", "{{requestId}}", "comments"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations and Teams",
+      "item": [
+        {
+          "name": "List Organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organizations",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations"]
+            }
+          }
+        },
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationName\": \"{{organizationName}}\",\n  \"organizationVisibility\": \"private\",\n  \"enableIssues\": true,\n  \"teamIds\": [1, 2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/organizations",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations"]
+            }
+          }
+        },
+        {
+          "name": "Get Organization",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{organizationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Organization",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": {{organizationId}},\n  \"organizationName\": \"{{organizationName}}\",\n  \"organizationVisibility\": \"private\",\n  \"enableIssues\": true,\n  \"teamIds\": [1, 2]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{organizationId}}"]
+            }
+          }
+        },
+        {
+          "name": "Sync Organization Plan",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationName}}/sync-plan",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{organizationName}}", "sync-plan"]
+            }
+          }
+        },
+        {
+          "name": "Delete Organization",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{organizationId}}"]
+            }
+          }
+        },
+        {
+          "name": "List Organization GitHub Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationId}}/github-teams?page=1&perPage=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["organizations", "{{organizationId}}", "github-teams"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "perPage",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Internal Committer Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams?organization={{organizationName}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams"],
+              "query": [
+                {
+                  "key": "organization",
+                  "value": "{{organizationName}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Topics",
+      "item": [
+        {
+          "name": "List Topics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/topics",
+              "host": ["{{baseUrl}}"],
+              "path": ["topics"]
+            }
+          }
+        },
+        {
+          "name": "Create Topic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topicName\": \"infra\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/topics",
+              "host": ["{{baseUrl}}"],
+              "path": ["topics"]
+            }
+          }
+        },
+        {
+          "name": "Update Topic",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topicId\": {{topicId}},\n  \"topicName\": \"platform\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/topics/{{topicId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["topics", "{{topicId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Topic",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/topics/{{topicId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["topics", "{{topicId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leads",
+      "item": [
+        {
+          "name": "List Leads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/leads",
+              "host": ["{{baseUrl}}"],
+              "path": ["leads"]
+            }
+          }
+        },
+        {
+          "name": "Create Lead",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadEmail\": \"lead@wso2.com\",\n  \"teamName\": \"Platform\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads",
+              "host": ["{{baseUrl}}"],
+              "path": ["leads"]
+            }
+          }
+        },
+        {
+          "name": "Update Lead",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": {{leadId}},\n  \"leadEmail\": \"lead@wso2.com\",\n  \"teamName\": \"Platform\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads/{{leadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["leads", "{{leadId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Lead",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/leads/{{leadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["leads", "{{leadId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Default Teams",
+      "item": [
+        {
+          "name": "List Default Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/default-teams",
+              "host": ["{{baseUrl}}"],
+              "path": ["default-teams"]
+            }
+          }
+        },
+        {
+          "name": "Create Default Team",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teamName\": \"wso2-all\",\n  \"permissionLevel\": \"pull\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/default-teams",
+              "host": ["{{baseUrl}}"],
+              "path": ["default-teams"]
+            }
+          }
+        },
+        {
+          "name": "Update Default Team",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teamId\": {{defaultTeamId}},\n  \"teamName\": \"wso2-all\",\n  \"permissionLevel\": \"pull\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/default-teams/{{defaultTeamId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["default-teams", "{{defaultTeamId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Default Team",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/default-teams/{{defaultTeamId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["default-teams", "{{defaultTeamId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "GitHub and Access",
+      "item": [
+        {
+          "name": "Get Fine-Grained Access Tokens",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fine-grained-access-tokens",
+              "host": ["{{baseUrl}}"],
+              "path": ["fine-grained-access-tokens"]
+            }
+          }
+        },
+        {
+          "name": "Set Default Repository Access",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/set-default-repository-access",
+              "host": ["{{baseUrl}}"],
+              "path": ["set-default-repository-access"]
+            }
+          }
+        },
+        {
+          "name": "Verify GitHub Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{githubAuthCode}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/github/verify-email",
+              "host": ["{{baseUrl}}"],
+              "path": ["github", "verify-email"]
+            },
+            "description": "Exchange a GitHub OAuth authorization code and verify the authenticated user's WSO2 email."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Security Dashboard",
+      "item": [
+        {
+          "name": "Get Security Dashboard Links",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/security-dashboard-links",
+              "host": ["{{baseUrl}}"],
+              "path": ["security-dashboard-links"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

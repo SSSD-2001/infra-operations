@@ -13,9 +13,21 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import { GitHub as GitHubIcon } from "@mui/icons-material";
 import { Box, Chip, Typography, alpha, useTheme } from "@mui/material";
 
+import { useEffect, useState } from "react";
+
 import { Role, UserState } from "@root/src/slices/authSlice/auth";
+import { SnackMessage } from "@config/constant";
+import { enqueueSnackbarMessage } from "@slices/commonSlice/common";
+import { useAppDispatch } from "@slices/store";
+import { getUserInfo } from "@slices/userSlice/user";
+import {
+  GitHubConnectResult,
+  consumeStoredGitHubConnectResult,
+  startGitHubOAuth,
+} from "@utils/githubOAuth";
 
 interface GreetingProps {
   user: UserState;
@@ -31,9 +43,29 @@ function getGreeting(): string {
 
 export default function Greeting({ user, roles }: GreetingProps) {
   const theme = useTheme();
+  const dispatch = useAppDispatch();
 
   const accent = theme.palette.primary.main;
   const accentBg = alpha(accent, 0.1);
+
+  // Picked up once when returning from the GitHub OAuth redirect, before the next /user-info fetch settles.
+  const [connectResult] = useState<GitHubConnectResult | null>(() =>
+    consumeStoredGitHubConnectResult(),
+  );
+
+  useEffect(() => {
+    if (!connectResult) return;
+    if (connectResult.status === "verified") {
+      dispatch(getUserInfo());
+    } else {
+      dispatch(
+        enqueueSnackbarMessage({
+          message: connectResult.errorMessage || SnackMessage.error.githubConnectMessage,
+          type: "error",
+        }),
+      );
+    }
+  }, [connectResult, dispatch]);
 
   const firstName = user.userInfo?.firstName ?? "there";
   const topRole = roles.includes(Role.ADMIN)
@@ -41,6 +73,33 @@ export default function Greeting({ user, roles }: GreetingProps) {
     : roles.includes(Role.APPROVER)
       ? Role.APPROVER.toLowerCase()
       : Role.EMPLOYEE.toLowerCase();
+
+  const isGithubConnected =
+    connectResult?.status === "verified" || Boolean(user.userInfo?.githubUserId);
+  const githubUsername =
+    (connectResult?.status === "verified" ? connectResult.githubUsername : undefined) ??
+    user.userInfo?.githubUsername ??
+    undefined;
+
+  const chipSx = {
+    display: "inline-flex",
+    alignItems: "center",
+    height: "fit-content",
+    width: "fit-content",
+    borderRadius: "20px",
+    fontSize: 11,
+    fontWeight: 500,
+    fontFamily: "monospace",
+    background: accentBg,
+    color: accent,
+    border: `1px solid ${alpha(accent, 0.2)}`,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    "& .MuiChip-label": {
+      px: 1.25,
+      py: 0.5,
+    },
+  };
 
   return (
     <Box
@@ -85,30 +144,33 @@ export default function Greeting({ user, roles }: GreetingProps) {
             {topRole}
           </Box>
         }
-        sx={{
-          display: "inline-flex",
-          alignItems: "center",
-          height: "fit-content",
-          width: "fit-content",
-          borderRadius: "20px",
-          fontSize: 11,
-          fontWeight: 500,
-          fontFamily: "monospace",
-          background: accentBg,
-          color: accent,
-          border: `1px solid ${alpha(accent, 0.2)}`,
-          whiteSpace: "nowrap",
-          mt: 0.75,
-          flexShrink: 0,
-          "& .MuiChip-label": {
-            px: 1.25,
-            py: 0.5,
-          },
-        }}
+        sx={{ ...chipSx, mt: 0.75 }}
       />
       <Typography fontSize={13} color={theme.palette.customText.primary.p3.active} mt={0.6}>
         Manage your infrastructure requests and access from one place.
       </Typography>
+      <Chip
+        label={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <GitHubIcon sx={{ fontSize: 13 }} />
+            {isGithubConnected
+              ? githubUsername
+                ? `Connected as ${githubUsername}`
+                : "Connected"
+              : "Connect with GitHub"}
+          </Box>
+        }
+        onClick={isGithubConnected ? undefined : () => startGitHubOAuth("/")}
+        sx={{
+          ...chipSx,
+          mt: 1,
+          cursor: isGithubConnected ? "default" : "pointer",
+          transition: "opacity 0.18s ease",
+          ...(!isGithubConnected && {
+            "&:hover": { opacity: 0.75 },
+          }),
+        }}
+      />
     </Box>
   );
 }

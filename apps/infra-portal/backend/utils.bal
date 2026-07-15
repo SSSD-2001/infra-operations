@@ -14,8 +14,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import infra_portal.authorization;
 import infra_portal.database as db;
 import infra_portal.github as gh;
+import infra_portal.scim;
+
+import ballerina/log;
 
 # Create a new GitHub repository and add requested parameters.
 #
@@ -137,6 +141,34 @@ public isolated function getGhStatusReport(gh:GitHubOperationResult[] gitHubOper
         reportMap[result.operation] = result.status;
     }
     return reportMap;
+}
+
+# Resolves the GitHub account link status for a user.
+#
+# + userInfo - Authenticated user's JWT payload
+# + return - Tuple of GitHub user ID and username; both nil if not linked or the username lookup failed
+public isolated function resolveGithubLinkStatus(authorization:CustomJwtPayload userInfo) returns [string?, string?] {
+    string? githubUserId = userInfo.githubUserId;
+    if githubUserId is () {
+        // Falls back to SCIM since the JWT claim may be stale until the next token refresh.
+        scim:User[]|error scimUsers = scim:searchUser(userInfo.email);
+        if scimUsers is error {
+            log:printError("Error while checking GitHub link status via SCIM", scimUsers, email = userInfo.email);
+        } else if scimUsers.length() > 0 {
+            githubUserId = scimUsers[0].urn\:scim\:schemas\:extension\:custom\:User?.githubUserId;
+        }
+    }
+
+    if githubUserId is () {
+        return [(), ()];
+    }
+
+    gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
+    if githubUser is error {
+        log:printError("Error while fetching GitHub username for user-info", githubUser, email = userInfo.email);
+        return [githubUserId, ()];
+    }
+    return [githubUserId, githubUser.login];
 }
 
 # Function to add Default teams to team list.
