@@ -133,9 +133,16 @@ export default function GitHubConnect() {
   return (
     <Box>
       <Typography variant="body2">
-        Before connecting, ensure your employee email is added and verified on your GitHub account.
+        Before connecting, ensure your company email is added and verified on your GitHub account.
       </Typography>
-      <Button onClick={handleRedirect}>Connect with GitHub</Button>
+      <Button
+        variant="contained"
+        color="success"
+        onClick={handleRedirect}
+        sx={{ mt: 1 }}
+      >
+        Connect with GitHub
+      </Button>
     </Box>
   );
 }

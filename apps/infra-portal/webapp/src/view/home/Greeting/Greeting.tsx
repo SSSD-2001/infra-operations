@@ -146,7 +146,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
         }
         sx={{ ...chipSx, mt: 0.75 }}
       />
-      <Typography fontSize={13} color={theme.palette.customText.primary.p3.active} mt={0.6}>
+      <Typography fontSize={15} color={theme.palette.customText.primary.p3.active} mt={0.6}>
         Manage your infrastructure requests and access from one place.
       </Typography>
       <Chip
@@ -164,13 +164,24 @@ export default function Greeting({ user, roles }: GreetingProps) {
         sx={{
           ...chipSx,
           mt: 1,
+          background: alpha(theme.palette.success.main, 0.12),
+          color: theme.palette.success.dark,
+          border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
           cursor: isGithubConnected ? "default" : "pointer",
-          transition: "opacity 0.18s ease",
+          transition: "opacity 0.18s ease, background 0.18s ease",
           ...(!isGithubConnected && {
-            "&:hover": { opacity: 0.75 },
+            "&:hover": {
+              opacity: 1,
+              background: alpha(theme.palette.success.main, 0.2),
+            },
           }),
         }}
       />
+      {!isGithubConnected && (
+        <Typography fontSize={12} color={theme.palette.customText.primary.p3.active} mt={0.75}>
+          Before connecting, ensure your company email is added and verified on your GitHub account.
+        </Typography>
+      )}
     </Box>
   );
 }
