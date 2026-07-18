@@ -124,7 +124,7 @@ const Sidebar = (props: SidebarProps) => {
             },
           }}
         >
-          {button}
+          <span style={{ display: "flex" }}>{button}</span>
         </Tooltip>
       );
     }

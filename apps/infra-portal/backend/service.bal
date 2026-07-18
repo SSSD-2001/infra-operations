@@ -25,6 +25,7 @@ import ballerina/http;
 import ballerina/log;
 
 configurable SecurityDashboardLinks securityDashboardLinks = ?;
+configurable string[] corsAllowedOrigins = ["http://localhost:3000"];
 
 final cache:Cache cache = new ({
     capacity: 2000,
@@ -54,6 +55,15 @@ service class ErrorInterceptor {
     }
 }
 
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: corsAllowedOrigins,
+        allowCredentials: true,
+        allowHeaders: ["Content-Type", "Authorization", "x-jwt-assertion"],
+        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        maxAge: 84900
+    }
+}
 service http:InterceptableService / on new http:Listener(8090) {
 
     # Request interceptor.
@@ -122,7 +132,9 @@ service http:InterceptableService / on new http:Listener(8090) {
             privileges.push(authorization:ADMIN_PRIVILEGE);
         }
 
-        UserInfoResponse userInfoResponse = {...loggedInUser, privileges};
+        [string?, string?] [githubUserId, githubUsername] = resolveGithubLinkStatus(userInfo);
+
+        UserInfoResponse userInfoResponse = {...loggedInUser, privileges, githubUserId, githubUsername};
 
         error? cacheError = cache.put(userInfo.email, userInfoResponse);
         if cacheError is error {
@@ -1896,6 +1908,12 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+
+        // Note: this endpoint is only ever called with a freshly-issued OAuth code right after the
+        // user completes the GitHub authorize redirect, so it must always exchange that code and
+        // trust its result. Short-circuiting on an existing link here (e.g. a stale in-process/SCIM
+        // entry from a previous connect on a shared machine) would let a new connect attempt return
+        // someone else's already-linked GitHub identity without ever validating the user's own code.
         gh:EmailVerificationResponse|error result
             = gh:verifyCompanyEmail({code: payload.code, email: userInfo.email});
 
@@ -1909,21 +1927,24 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        gh:EmailVerificationResponse {status, githubUserId} = result;
+        gh:EmailVerificationResponse {status, githubUserId, githubUsername} = result;
         if status == "verified" && githubUserId is string {
+            // Keep the link available in-process immediately, independent of SCIM, so refreshes
+            // keep reflecting a Connected state even when the SCIM operations service is unreachable.
+            storeGithubLink(userInfo.email, githubUserId, githubUsername);
+
             scim:User|error? updatedUser
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
-                string customError = "Error while updating GitHub user ID for the user!";
-                log:printError(customError, updatedUser);
-                return <http:InternalServerError>{
-                    body: {
-                        message: customError
-                    }
-                };
-            }
-            if updatedUser is () {
+                // The GitHub identity check with GitHub already succeeded at this point; a downstream
+                // SCIM outage shouldn't fail the whole connect flow for the user. Log and continue so the
+                // user still sees a verified result — the in-process store above covers persistence
+                // until SCIM is reachable again.
+                log:printError(
+                        "Error while updating GitHub user ID for the user! Continuing without persisting the link.",
+                        updatedUser, email = userInfo.email);
+            } else if updatedUser is () {
                 string customError = "User not found for the email!";
                 log:printError(customError, email = userInfo.email);
                 return <http:InternalServerError>{
@@ -1931,6 +1952,15 @@ service http:InterceptableService / on new http:Listener(8090) {
                         message: customError
                     }
                 };
+            }
+
+            // Invalidate the cached user info so the next fetch reflects the newly linked GitHub
+            // account, whether resolved from SCIM or the in-process fallback store above.
+            cache:Error? cacheInvalidateError = cache.invalidate(userInfo.email);
+            if cacheInvalidateError is cache:Error {
+                log:printError(
+                        "An error occurred while invalidating cached user info", cacheInvalidateError,
+                        email = userInfo.email);
             }
         }
         return result;

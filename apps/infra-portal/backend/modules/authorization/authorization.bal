@@ -27,6 +27,11 @@ public isolated service class JwtInterceptor {
     isolated resource function default [string... path](http:RequestContext ctx, http:Request req)
         returns http:NextService|http:Forbidden|http:InternalServerError|error? {
 
+        // Allow CORS preflight requests to pass through without JWT validation.
+        if req.method == http:OPTIONS {
+            return ctx.next();
+        }
+
         string|error idToken = req.getHeader(JWT_ASSERTION_HEADER);
         if idToken is error {
             string errorMsg = "Missing invoker info header!";
