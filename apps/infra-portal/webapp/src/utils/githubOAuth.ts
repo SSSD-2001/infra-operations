@@ -42,6 +42,9 @@ export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETUR
     scope: (GithubOAuthConfig.scope || []).join(" "),
     state,
     redirect_uri: GithubOAuthConfig.githubAuthRedirectUrl,
+    // Forces GitHub's account picker so a shared/local browser can't silently reuse whichever
+    // GitHub session happens to be active, which would connect the wrong GitHub account.
+    prompt: "select_account",
   });
   window.location.href = `${GithubOAuthConfig.oauthAuthorizationBaseUrl}?${params.toString()}`;
 };
