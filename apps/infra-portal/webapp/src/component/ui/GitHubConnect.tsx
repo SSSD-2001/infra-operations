@@ -19,7 +19,10 @@ import { useEffect, useState } from "react";
 
 import { GITHUB_OAUTH_STATE_KEY, STATE_EXPIRY_MS, SnackMessage } from "@config/constant";
 import { State } from "@root/src/types/types";
-import { connectGitHub } from "@slices/githubOauthAppSlice/githubOauth";
+import {
+  connectGitHub,
+  setDefaultRepositoryAccess,
+} from "@slices/githubOauthAppSlice/githubOauth";
 import { useAppDispatch, useAppSelector } from "@slices/store";
 import {
   DEFAULT_GITHUB_OAUTH_RETURN_PATH,
@@ -32,6 +35,7 @@ import {
 
 export default function GitHubConnect() {
   const githubConnectState = useAppSelector((state) => state.githubConnect);
+  const userInfo = useAppSelector((state) => state.user.userInfo);
   const dispatch = useAppDispatch();
 
   const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(() =>
@@ -41,6 +45,10 @@ export default function GitHubConnect() {
   const handleRedirect = () => {
     setStoredResult(null);
     startGitHubOAuth(DEFAULT_GITHUB_OAUTH_RETURN_PATH);
+  };
+
+  const handleGrantDefaultAccess = () => {
+    void dispatch(setDefaultRepositoryAccess());
   };
 
   // Runs once on mount — reads directly from window.location to avoid React Router reactivity issues.
@@ -92,10 +100,13 @@ export default function GitHubConnect() {
       const result = await dispatch(connectGitHub({ code }));
 
       if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
+        // Grant default team memberships immediately after a successful verify.
+        const grantResult = await dispatch(setDefaultRepositoryAccess());
         navigateWithGitHubConnectResult(returnPath, {
           status: "verified",
           githubUserId: result.payload.githubUserId,
           githubUsername: result.payload.githubUsername,
+          defaultAccessGranted: setDefaultRepositoryAccess.fulfilled.match(grantResult),
         });
       } else if (connectGitHub.fulfilled.match(result)) {
         navigateWithGitHubConnectResult(returnPath, {
@@ -113,19 +124,58 @@ export default function GitHubConnect() {
     void handleCallback();
   }, [dispatch]);
 
-  // Show spinner while any async operation is in flight or settling (pre-navigation flash guard)
-  if (githubConnectState.state !== State.idle && !storedResult) return <CircularProgress />;
+  const isConnected =
+    storedResult?.status === "verified" || Boolean(userInfo?.githubUserId);
+  const githubUsername =
+    (storedResult?.status === "verified" ? storedResult.githubUsername : undefined) ??
+    userInfo?.githubUsername;
 
-  if (storedResult) {
-    if (storedResult.status === "verified") {
-      return (
-        <Typography color="success.main">Connected as @{storedResult.githubUsername}</Typography>
-      );
-    }
+  // Show spinner while any async operation is in flight or settling (pre-navigation flash guard)
+  if (
+    (githubConnectState.state !== State.idle ||
+      githubConnectState.defaultAccessState === State.loading) &&
+    !storedResult
+  ) {
+    return <CircularProgress />;
+  }
+
+  if (storedResult && storedResult.status !== "verified") {
     return (
       <Box>
         <Typography color="error.main">{storedResult.errorMessage}</Typography>
         <Button onClick={handleRedirect}>Try Again</Button>
+      </Box>
+    );
+  }
+
+  if (isConnected) {
+    const accessGranted =
+      githubConnectState.defaultAccessState === State.success ||
+      storedResult?.defaultAccessGranted === true;
+
+    return (
+      <Box>
+        <Typography color="success.main">
+          Connected{githubUsername ? ` as @${githubUsername}` : ""}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          {accessGranted
+            ? "Default repository read access has been requested for your employment type."
+            : "Grant default read access to the repositories for your employment type."}
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleGrantDefaultAccess}
+          disabled={githubConnectState.defaultAccessState === State.loading}
+          sx={{ mt: 1 }}
+        >
+          {githubConnectState.defaultAccessState === State.loading
+            ? "Granting access..."
+            : accessGranted
+              ? "Re-grant default repository access"
+              : "Grant default repository access"}
+        </Button>
       </Box>
     );
   }

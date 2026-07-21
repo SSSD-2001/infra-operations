@@ -29,6 +29,8 @@ export interface GitHubConnectResult {
   githubUserId?: string;
   githubUsername?: string;
   errorMessage?: string;
+  /** Set when default repository access was requested during the OAuth callback. */
+  defaultAccessGranted?: boolean;
 }
 
 // Kicks off the GitHub authorize redirect, remembering where the callback should send the user back to.

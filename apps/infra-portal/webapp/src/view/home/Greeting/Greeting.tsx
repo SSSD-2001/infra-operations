@@ -56,6 +56,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
   useEffect(() => {
     if (!connectResult) return;
     if (connectResult.status === "verified") {
+      // Default access is already granted on the /github/callback page before navigation.
       dispatch(getUserInfo());
     } else {
       dispatch(
