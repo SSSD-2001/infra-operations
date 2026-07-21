@@ -22,6 +22,10 @@ export default function RepositoryAccessRequests() {
       <Typography variant="h6" gutterBottom>
         Repository Access
       </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Connect your GitHub account with your verified work email, then grant default read access
+        based on your employment type (permanent team readonly teams, or intern teams).
+      </Typography>
       <GitHubConnect />
     </Box>
   );

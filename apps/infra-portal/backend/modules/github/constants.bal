@@ -44,22 +44,32 @@ const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 # Readonly team slug.
 const string READONLY_TEAM_SLUG = "wso2-readonly";
 
-// - **wso2-support** > `wso2-support-readonly`
-// - **wso2** > `wso2-readonly`
-// - **wso2-extensions** > `wso2-readonly`
-# Default team access for the organization and team combinations.
-public final readonly & OrganizationAndTeam[] PERMANENT_DEFAULT_TEAM_ACCESS = [
+# Default team access for permanent employees.
+# Override in Config.toml for local/test orgs (defaults are production).
+# - **wso2-support** > `wso2-support-readonly`
+# - **wso2** > `wso2-readonly`
+# - **wso2-extensions** > `wso2-readonly`
+public configurable OrganizationAndTeam[] permanentDefaultTeamAccess = [
     {orgName: "wso2-support", teamSlug: "wso2-support-readonly"},
     {orgName: "wso2", teamSlug: "wso2-readonly"},
     {orgName: "wso2-extensions", teamSlug: "wso2-readonly"}
 ];
 
-// - **wso2-cs** > `cs-team`
-// - **wso2-enterprise** > `customer-success-team`
-# Customer success team access for the organization and team combinations.
-public final readonly & OrganizationAndTeam[] CS_TEAM_ACCESS = [
+# Extra team access for Customer Success permanent employees.
+# - **wso2-cs** > `cs-team`
+# - **wso2-enterprise** > `customer-success-team`
+public configurable OrganizationAndTeam[] csTeamAccess = [
     {orgName: "wso2-cs", teamSlug: "cs-team"},
     {orgName: "wso2-enterprise", teamSlug: "customer-success-team"}
 ];
 
-public const string[] INTERNS_DEFAULT_ORGANIZATIONS = ["wso2-support", "wso2", "wso2-extensions", "ballerina-platform"];
+# Organizations where interns receive default team membership.
+public configurable string[] internsDefaultOrganizations = [
+    "wso2",
+    "wso2-extensions",
+    "wso2-support",
+    "ballerina-platform"
+];
+
+# Team slug granted to interns in each intern default organization.
+public configurable string internsTeamSlug = "wso2-all-interns";

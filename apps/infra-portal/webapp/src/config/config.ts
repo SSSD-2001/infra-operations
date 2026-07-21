@@ -83,6 +83,7 @@ export const AppConfig = {
     defaultTeams: ServiceBaseUrl + "/default-teams",
 
     githubVerifyEmail: ServiceBaseUrl + "/github/verify-email",
+    setDefaultRepositoryAccess: ServiceBaseUrl + "/set-default-repository-access",
 
     securityDashboardLinks: ServiceBaseUrl + "/security-dashboard-links",
   },

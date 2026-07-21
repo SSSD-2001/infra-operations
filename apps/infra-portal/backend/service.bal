@@ -1815,31 +1815,36 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        string? gitHubUserId = userInfo.githubUserId;
-        if gitHubUserId is () {
+        // Prefer JWT claim, then in-process store / SCIM — the Asgardeo JWT claim stays stale until
+        // the next token refresh after verify-email writes githubUserId.
+        [string?, string?] [resolvedGithubUserId, resolvedGithubUsername] = resolveGithubLinkStatus(userInfo);
+        if resolvedGithubUserId is () {
             return <http:Forbidden>{
                 body: {message: "GitHub account is not verified."}
             };
         }
 
-        gh:AddOrUpdateTeamMemberResponse|error result
-            = error("No team membership changes made as the employment type does not match any criteria.");
-
-        gh:GitHubUser|error gitHubUser = gh:getUserDetails(gitHubUserId);
-        if gitHubUser is error {
-            string customError = "Error while fetching GitHub user details!";
-            log:printError(customError, gitHubUser);
-            return <http:InternalServerError>{
-                body: {
-                    message: customError
-                }
-            };
+        string gitHubUserName;
+        if resolvedGithubUsername is string {
+            gitHubUserName = resolvedGithubUsername;
+        } else {
+            gh:GitHubUser|error gitHubUser = gh:getUserDetails(resolvedGithubUserId);
+            if gitHubUser is error {
+                string customError = "Error while fetching GitHub user details!";
+                log:printError(customError, gitHubUser);
+                return <http:InternalServerError>{
+                    body: {
+                        message: customError
+                    }
+                };
+            }
+            gitHubUserName = gitHubUser.login;
         }
 
-        string gitHubUserName = gitHubUser.login;
-        if employee.employmentType is PERMANENT {
+        gh:AddOrUpdateTeamMemberResponse|error result;
+        if employee.employmentType == PERMANENT {
             gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from gh:OrganizationAndTeam organizationAndTeam in gh:PERMANENT_DEFAULT_TEAM_ACCESS
+                = from gh:OrganizationAndTeam organizationAndTeam in gh:permanentDefaultTeamAccess
                 select {
                     orgName: organizationAndTeam.orgName,
                     teamSlug: organizationAndTeam.teamSlug,
@@ -1847,9 +1852,9 @@ service http:InterceptableService / on new http:Listener(8090) {
                     role: gh:MEMBER
                 };
 
-            if employee.department is CUSTOMER_SUCCESS_DEPARTMENT {
+            if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
                 gh:AddOrUpdateTeamMemberInformationInput[] customerSuccessInputs
-                    = from gh:OrganizationAndTeam organizationAndTeam in gh:CS_TEAM_ACCESS
+                    = from gh:OrganizationAndTeam organizationAndTeam in gh:csTeamAccess
                     select {
                         orgName: organizationAndTeam.orgName,
                         teamSlug: organizationAndTeam.teamSlug,
@@ -1860,18 +1865,26 @@ service http:InterceptableService / on new http:Listener(8090) {
                 inputs.push(...customerSuccessInputs);
             }
             result = gh:addOrUpdateTeamMemberships(inputs);
-        }
-        if employee.employmentType is INTERNSHIP {
+        } else if employee.employmentType == INTERNSHIP {
             gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from string organization in gh:INTERNS_DEFAULT_ORGANIZATIONS
+                = from string organization in gh:internsDefaultOrganizations
                 select {
                     orgName: organization,
-                    teamSlug: WSO2_ALL_INTERNS_TEAM_SLUG,
+                    teamSlug: gh:internsTeamSlug,
                     userName: gitHubUserName,
                     role: gh:MEMBER
                 };
 
             result = gh:addOrUpdateTeamMemberships(inputs);
+        } else {
+            string actualType = employee.employmentType ?: "null";
+            string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
+            log:printError(customError, email = userInfo.email, employmentType = actualType);
+            return <http:InternalServerError>{
+                body: {
+                    message: customError
+                }
+            };
         }
 
         if result is error {

@@ -32,15 +32,22 @@ export interface GitHubUserVerifyResponse {
   githubUsername?: string;
 }
 
+export interface SetDefaultRepositoryAccessResponse {
+  successfulMemberships: unknown[];
+  failedMemberships: unknown[];
+}
+
 interface GitHubConnectState {
   state: State;
-  githubUserId?: string; // stored temporarily until SCIM calls are in place to add the id to the asgardeo claim
+  githubUserId?: string;
   githubUsername?: string;
+  defaultAccessState: State;
   errorMessage?: string | null;
 }
 
 const initialState: GitHubConnectState = {
   state: State.idle,
+  defaultAccessState: State.idle,
 };
 
 export const connectGitHub = createAsyncThunk(
@@ -75,6 +82,41 @@ export const connectGitHub = createAsyncThunk(
   },
 );
 
+export const setDefaultRepositoryAccess = createAsyncThunk(
+  "auth/setDefaultRepositoryAccess",
+  async (_, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await APIService.getInstance().put(
+        AppConfig.serviceUrls.setDefaultRepositoryAccess,
+      );
+      dispatch(
+        enqueueSnackbarMessage({
+          message: SnackMessage.success.setDefaultRepositoryAccessMessage,
+          type: "success",
+        }),
+      );
+      return response.data as SetDefaultRepositoryAccessResponse;
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        return rejectWithValue("Request canceled");
+      }
+      if (axios.isAxiosError(error)) {
+        dispatch(
+          enqueueSnackbarMessage({
+            message:
+              error.response?.status === HttpStatusCode.InternalServerError
+                ? SnackMessage.error.setDefaultRepositoryAccessMessage
+                : String((error.response?.data as { message?: string }).message || "Unknown error"),
+            type: "error",
+          }),
+        );
+        return rejectWithValue(error.response?.data || "Failed to set default repository access");
+      }
+      return rejectWithValue("An unexpected error occurred");
+    }
+  },
+);
+
 const githubConnectSlice = createSlice({
   name: "githubConnect",
   initialState,
@@ -101,6 +143,15 @@ const githubConnectSlice = createSlice({
       .addCase(connectGitHub.rejected, (state, action) => {
         state.state = State.failed;
         state.errorMessage = action.payload as string;
+      })
+      .addCase(setDefaultRepositoryAccess.pending, (state) => {
+        state.defaultAccessState = State.loading;
+      })
+      .addCase(setDefaultRepositoryAccess.fulfilled, (state) => {
+        state.defaultAccessState = State.success;
+      })
+      .addCase(setDefaultRepositoryAccess.rejected, (state) => {
+        state.defaultAccessState = State.failed;
       });
   },
 });

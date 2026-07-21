@@ -88,3 +88,23 @@ isolated function testResolveGithubLinkStatusReturnsNilsWhenNoLinkExistsAnywhere
     test:assertTrue(result[0] is (), "expected no GitHub user ID when no link exists");
     test:assertTrue(result[1] is (), "expected no GitHub username when no link exists");
 }
+
+@test:Config {}
+isolated function testResolveGithubLinkStatusUsedWhenJwtClaimMissingAfterVerify() {
+    // Mirrors set-default-repository-access: after verify-email the JWT claim is often still
+    // empty until Asgardeo re-issues a token, so grant must resolve via the in-process store.
+    string email = "grant-fallback-after-verify@wso2.com";
+    storeGithubLink(email, "5555555", "grant-user");
+
+    authorization:CustomJwtPayload userInfo = {
+        sub: "sub-grant-fallback",
+        email: email,
+        groups: ["wso2-everyone"]
+        // githubUserId intentionally omitted (stale JWT)
+    };
+
+    [string?, string?] [githubUserId, githubUsername] = resolveGithubLinkStatus(userInfo);
+
+    test:assertEquals(githubUserId, "5555555");
+    test:assertEquals(githubUsername, "grant-user");
+}

@@ -54,6 +54,8 @@ export const SnackMessage = {
 
     syncedOrganizationMessage:
       "Visibility has been updated to Public due to Free plan restrictions.",
+
+    setDefaultRepositoryAccessMessage: "Default repository access granted successfully.",
   },
   error: {
     addCommentMessage: "Unable to add the comment",
@@ -100,6 +102,7 @@ export const SnackMessage = {
 
     githubConnectMessage: "Connection failed. Please try again.",
     githubUnverifiedMessage: "No verified WSO2 email found on your GitHub account.",
+    setDefaultRepositoryAccessMessage: "Unable to grant default repository access. Please try again.",
   },
   warning: {},
 };
