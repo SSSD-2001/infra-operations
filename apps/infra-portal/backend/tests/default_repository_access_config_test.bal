@@ -24,12 +24,14 @@ function testDefaultRepositoryAccessConfigIsPopulated() {
             "permanentDefaultTeamAccess must define at least one org/team");
     test:assertTrue(gh:csTeamAccess.length() > 0,
             "csTeamAccess must define at least one org/team");
-    test:assertTrue(gh:internsDefaultOrganizations.length() > 0,
-            "internsDefaultOrganizations must define at least one org");
-    test:assertTrue(gh:internsTeamSlug.length() > 0,
-            "internsTeamSlug must be non-empty");
+    test:assertTrue(gh:internsDefaultTeamAccess.length() > 0,
+            "internsDefaultTeamAccess must define at least one org/team");
 
-    foreach gh:OrganizationAndTeam entry in gh:permanentDefaultTeamAccess {
+    foreach gh:OrganizationAndTeam entry in [
+        ...gh:permanentDefaultTeamAccess,
+        ...gh:csTeamAccess,
+        ...gh:internsDefaultTeamAccess
+    ] {
         test:assertTrue(entry.orgName.length() > 0, "orgName must be non-empty");
         test:assertTrue(entry.teamSlug.length() > 0, "teamSlug must be non-empty");
     }

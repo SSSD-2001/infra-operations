@@ -31,7 +31,28 @@ export interface GitHubConnectResult {
   errorMessage?: string;
   /** Set when default repository access was requested during the OAuth callback. */
   defaultAccessGranted?: boolean;
+  /** Persisted failure reason when automatic default-access grant fails after verify. */
+  defaultAccessError?: string;
 }
+
+export interface GitHubConnectionStatus {
+  isConnected: boolean;
+  githubUsername?: string;
+}
+
+/** Derives connected state and username from a stored OAuth result and persisted userInfo. */
+export const resolveGitHubConnectionStatus = (
+  storedResult: GitHubConnectResult | null | undefined,
+  userInfo?: { githubUserId?: string | null; githubUsername?: string | null } | null,
+): GitHubConnectionStatus => {
+  const isConnected =
+    storedResult?.status === "verified" || Boolean(userInfo?.githubUserId);
+  const githubUsername =
+    (storedResult?.status === "verified" ? storedResult.githubUsername : undefined) ??
+    userInfo?.githubUsername ??
+    undefined;
+  return { isConnected, githubUsername: githubUsername ?? undefined };
+};
 
 // Kicks off the GitHub authorize redirect, remembering where the callback should send the user back to.
 export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETURN_PATH): void => {

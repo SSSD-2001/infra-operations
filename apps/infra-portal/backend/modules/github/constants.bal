@@ -57,13 +57,10 @@ public configurable OrganizationAndTeam[] csTeamAccess = [
     {orgName: "wso2-enterprise", teamSlug: "customer-success-team"}
 ];
 
-# Organizations where interns receive default team membership.
-public configurable string[] internsDefaultOrganizations = [
-    "wso2",
-    "wso2-extensions",
-    "wso2-support",
-    "ballerina-platform"
+# Default team access for interns.
+public configurable OrganizationAndTeam[] internsDefaultTeamAccess = [
+    {orgName: "wso2", teamSlug: "wso2-all-interns"},
+    {orgName: "wso2-extensions", teamSlug: "wso2-all-interns"},
+    {orgName: "wso2-support", teamSlug: "wso2-all-interns"},
+    {orgName: "ballerina-platform", teamSlug: "wso2-all-interns"}
 ];
-
-# Team slug granted to interns in each intern default organization.
-public configurable string internsTeamSlug = "wso2-all-interns";

@@ -30,8 +30,22 @@ import {
   GitHubOAuthStoredState,
   consumeStoredGitHubConnectResult,
   navigateWithGitHubConnectResult,
+  resolveGitHubConnectionStatus,
   startGitHubOAuth,
 } from "@utils/githubOAuth";
+
+function extractDefaultAccessError(payload: unknown): string {
+  if (typeof payload === "string" && payload.length > 0) {
+    return payload;
+  }
+  if (payload && typeof payload === "object" && "message" in payload) {
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+  return SnackMessage.error.setDefaultRepositoryAccessMessage;
+}
 
 export default function GitHubConnect() {
   const githubConnectState = useAppSelector((state) => state.githubConnect);
@@ -102,11 +116,15 @@ export default function GitHubConnect() {
       if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
         // Grant default team memberships immediately after a successful verify.
         const grantResult = await dispatch(setDefaultRepositoryAccess());
+        const accessGranted = setDefaultRepositoryAccess.fulfilled.match(grantResult);
         navigateWithGitHubConnectResult(returnPath, {
           status: "verified",
           githubUserId: result.payload.githubUserId,
           githubUsername: result.payload.githubUsername,
-          defaultAccessGranted: setDefaultRepositoryAccess.fulfilled.match(grantResult),
+          defaultAccessGranted: accessGranted,
+          ...(accessGranted
+            ? {}
+            : { defaultAccessError: extractDefaultAccessError(grantResult.payload) }),
         });
       } else if (connectGitHub.fulfilled.match(result)) {
         navigateWithGitHubConnectResult(returnPath, {
@@ -124,18 +142,10 @@ export default function GitHubConnect() {
     void handleCallback();
   }, [dispatch]);
 
-  const isConnected =
-    storedResult?.status === "verified" || Boolean(userInfo?.githubUserId);
-  const githubUsername =
-    (storedResult?.status === "verified" ? storedResult.githubUsername : undefined) ??
-    userInfo?.githubUsername;
+  const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, userInfo);
 
-  // Show spinner while any async operation is in flight or settling (pre-navigation flash guard)
-  if (
-    (githubConnectState.state !== State.idle ||
-      githubConnectState.defaultAccessState === State.loading) &&
-    !storedResult
-  ) {
+  // Full-page spinner only for OAuth connect loading — keep connected UI for default-access grants.
+  if (githubConnectState.state !== State.idle && !storedResult) {
     return <CircularProgress />;
   }
 
@@ -152,6 +162,10 @@ export default function GitHubConnect() {
     const accessGranted =
       githubConnectState.defaultAccessState === State.success ||
       storedResult?.defaultAccessGranted === true;
+    const defaultAccessError =
+      githubConnectState.defaultAccessState === State.failed
+        ? SnackMessage.error.setDefaultRepositoryAccessMessage
+        : storedResult?.defaultAccessError;
 
     return (
       <Box>
@@ -163,6 +177,11 @@ export default function GitHubConnect() {
             ? "Default repository read access has been requested for your employment type."
             : "Grant default read access to the repositories for your employment type."}
         </Typography>
+        {defaultAccessError && (
+          <Typography color="error.main" variant="body2" sx={{ mt: 1 }}>
+            {defaultAccessError}
+          </Typography>
+        )}
         <Button
           variant="contained"
           color="primary"

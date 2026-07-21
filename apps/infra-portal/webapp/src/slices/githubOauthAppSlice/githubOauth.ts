@@ -89,13 +89,23 @@ export const setDefaultRepositoryAccess = createAsyncThunk(
       const response = await APIService.getInstance().put(
         AppConfig.serviceUrls.setDefaultRepositoryAccess,
       );
+      const data = response.data as SetDefaultRepositoryAccessResponse;
+      if (data.failedMemberships?.length) {
+        dispatch(
+          enqueueSnackbarMessage({
+            message: SnackMessage.error.setDefaultRepositoryAccessMessage,
+            type: "error",
+          }),
+        );
+        return rejectWithValue(data);
+      }
       dispatch(
         enqueueSnackbarMessage({
           message: SnackMessage.success.setDefaultRepositoryAccessMessage,
           type: "success",
         }),
       );
-      return response.data as SetDefaultRepositoryAccessResponse;
+      return data;
     } catch (error) {
       if (axios.isCancel(error)) {
         return rejectWithValue("Request canceled");
@@ -106,7 +116,10 @@ export const setDefaultRepositoryAccess = createAsyncThunk(
             message:
               error.response?.status === HttpStatusCode.InternalServerError
                 ? SnackMessage.error.setDefaultRepositoryAccessMessage
-                : String((error.response?.data as { message?: string }).message || "Unknown error"),
+                : String(
+                    (error.response?.data as { message?: string } | undefined)?.message ||
+                      "Unknown error",
+                  ),
             type: "error",
           }),
         );
