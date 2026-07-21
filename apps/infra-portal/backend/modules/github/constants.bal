@@ -45,10 +45,6 @@ const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 const string READONLY_TEAM_SLUG = "wso2-readonly";
 
 # Default team access for permanent employees.
-# Override in Config.toml for local/test orgs (defaults are production).
-# - **wso2-support** > `wso2-support-readonly`
-# - **wso2** > `wso2-readonly`
-# - **wso2-extensions** > `wso2-readonly`
 public configurable OrganizationAndTeam[] permanentDefaultTeamAccess = [
     {orgName: "wso2-support", teamSlug: "wso2-support-readonly"},
     {orgName: "wso2", teamSlug: "wso2-readonly"},
@@ -56,8 +52,6 @@ public configurable OrganizationAndTeam[] permanentDefaultTeamAccess = [
 ];
 
 # Extra team access for Customer Success permanent employees.
-# - **wso2-cs** > `cs-team`
-# - **wso2-enterprise** > `customer-success-team`
 public configurable OrganizationAndTeam[] csTeamAccess = [
     {orgName: "wso2-cs", teamSlug: "cs-team"},
     {orgName: "wso2-enterprise", teamSlug: "customer-success-team"}
