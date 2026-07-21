@@ -10,8 +10,7 @@ Built-in defaults are production org/team slugs:
 | --- | --- | --- |
 | `permanentDefaultTeamAccess` | Permanent employees | `wso2-support` → `wso2-support-readonly`, `wso2` → `wso2-readonly`, `wso2-extensions` → `wso2-readonly` |
 | `csTeamAccess` | Permanent employees in Customer Success (in addition to permanent defaults) | `wso2-cs` → `cs-team`, `wso2-enterprise` → `customer-success-team` |
-| `internsDefaultOrganizations` | Interns | `wso2`, `wso2-extensions`, `wso2-support`, `ballerina-platform` |
-| `internsTeamSlug` | Interns (team in each intern org) | `wso2-all-interns` |
+| `internsDefaultTeamAccess` | Interns | `wso2` / `wso2-extensions` / `wso2-support` / `ballerina-platform` → `wso2-all-interns` |
 
 #### Override for local/test
 
@@ -25,6 +24,7 @@ permanentDefaultTeamAccess = [
 csTeamAccess = [
     {orgName = "your-cs-test-org", teamSlug = "your-cs-team"}
 ]
-internsDefaultOrganizations = ["your-test-org"]
-internsTeamSlug = "your-interns-team"
+internsDefaultTeamAccess = [
+    {orgName = "your-test-org", teamSlug = "your-interns-team"}
+]
 ```

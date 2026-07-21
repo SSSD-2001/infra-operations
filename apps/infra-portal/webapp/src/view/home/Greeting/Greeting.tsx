@@ -26,6 +26,7 @@ import { getUserInfo } from "@slices/userSlice/user";
 import {
   GitHubConnectResult,
   consumeStoredGitHubConnectResult,
+  resolveGitHubConnectionStatus,
   startGitHubOAuth,
 } from "@utils/githubOAuth";
 
@@ -58,6 +59,14 @@ export default function Greeting({ user, roles }: GreetingProps) {
     if (connectResult.status === "verified") {
       // Default access is already granted on the /github/callback page before navigation.
       dispatch(getUserInfo());
+      if (connectResult.defaultAccessGranted === false && connectResult.defaultAccessError) {
+        dispatch(
+          enqueueSnackbarMessage({
+            message: connectResult.defaultAccessError,
+            type: "error",
+          }),
+        );
+      }
     } else {
       dispatch(
         enqueueSnackbarMessage({
@@ -75,12 +84,10 @@ export default function Greeting({ user, roles }: GreetingProps) {
       ? Role.APPROVER.toLowerCase()
       : Role.EMPLOYEE.toLowerCase();
 
-  const isGithubConnected =
-    connectResult?.status === "verified" || Boolean(user.userInfo?.githubUserId);
-  const githubUsername =
-    (connectResult?.status === "verified" ? connectResult.githubUsername : undefined) ??
-    user.userInfo?.githubUsername ??
-    undefined;
+  const { isConnected: isGithubConnected, githubUsername } = resolveGitHubConnectionStatus(
+    connectResult,
+    user.userInfo,
+  );
 
   const chipSx = {
     display: "inline-flex",

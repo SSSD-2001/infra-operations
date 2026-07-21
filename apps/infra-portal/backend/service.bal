@@ -25,7 +25,6 @@ import ballerina/http;
 import ballerina/log;
 
 configurable SecurityDashboardLinks securityDashboardLinks = ?;
-configurable string[] corsAllowedOrigins = ["http://localhost:3000"];
 
 final cache:Cache cache = new ({
     capacity: 2000,
@@ -55,15 +54,6 @@ service class ErrorInterceptor {
     }
 }
 
-@http:ServiceConfig {
-    cors: {
-        allowOrigins: corsAllowedOrigins,
-        allowCredentials: true,
-        allowHeaders: ["Content-Type", "Authorization", "x-jwt-assertion"],
-        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        maxAge: 84900
-    }
-}
 service http:InterceptableService / on new http:Listener(8090) {
 
     # Request interceptor.
@@ -1824,22 +1814,16 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        string gitHubUserName;
-        if resolvedGithubUsername is string {
-            gitHubUserName = resolvedGithubUsername;
-        } else {
-            gh:GitHubUser|error gitHubUser = gh:getUserDetails(resolvedGithubUserId);
-            if gitHubUser is error {
-                string customError = "Error while fetching GitHub user details!";
-                log:printError(customError, gitHubUser);
-                return <http:InternalServerError>{
-                    body: {
-                        message: customError
-                    }
-                };
-            }
-            gitHubUserName = gitHubUser.login;
+        if resolvedGithubUsername is () {
+            string customError = "Error while resolving GitHub username!";
+            log:printError(customError, email = userInfo.email);
+            return <http:InternalServerError>{
+                body: {
+                    message: customError
+                }
+            };
         }
+        string gitHubUserName = resolvedGithubUsername;
 
         gh:AddOrUpdateTeamMemberResponse|error result;
         if employee.employmentType == PERMANENT {
@@ -1867,10 +1851,10 @@ service http:InterceptableService / on new http:Listener(8090) {
             result = gh:addOrUpdateTeamMemberships(inputs);
         } else if employee.employmentType == INTERNSHIP {
             gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from string organization in gh:internsDefaultOrganizations
+                = from gh:OrganizationAndTeam organizationAndTeam in gh:internsDefaultTeamAccess
                 select {
-                    orgName: organization,
-                    teamSlug: gh:internsTeamSlug,
+                    orgName: organizationAndTeam.orgName,
+                    teamSlug: organizationAndTeam.teamSlug,
                     userName: gitHubUserName,
                     role: gh:MEMBER
                 };
@@ -1942,17 +1926,13 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         gh:EmailVerificationResponse {status, githubUserId, githubUsername} = result;
         if status == "verified" && githubUserId is string {
-            // Keep the link available in-process immediately, independent of SCIM, so refreshes
-            // keep reflecting a Connected state even when the SCIM operations service is unreachable.
-            storeGithubLink(userInfo.email, githubUserId, githubUsername);
-
             scim:User|error? updatedUser
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
                 // The GitHub identity check with GitHub already succeeded at this point; a downstream
                 // SCIM outage shouldn't fail the whole connect flow for the user. Log and continue so the
-                // user still sees a verified result — the in-process store above covers persistence
+                // user still sees a verified result — the in-process store below covers persistence
                 // until SCIM is reachable again.
                 log:printError(
                         "Error while updating GitHub user ID for the user! Continuing without persisting the link.",
@@ -1966,6 +1946,10 @@ service http:InterceptableService / on new http:Listener(8090) {
                     }
                 };
             }
+
+            // Keep the link available in-process immediately, independent of SCIM, so refreshes
+            // keep reflecting a Connected state even when the SCIM operations service is unreachable.
+            storeGithubLink(userInfo.email, githubUserId, githubUsername);
 
             // Invalidate the cached user info so the next fetch reflects the newly linked GitHub
             // account, whether resolved from SCIM or the in-process fallback store above.
