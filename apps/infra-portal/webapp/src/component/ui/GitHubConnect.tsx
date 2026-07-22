@@ -50,6 +50,7 @@ function extractDefaultAccessError(payload: unknown): string {
 export default function GitHubConnect() {
   const githubConnectState = useAppSelector((state) => state.githubConnect);
   const userInfo = useAppSelector((state) => state.user.userInfo);
+  const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
   const dispatch = useAppDispatch();
 
   const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(() =>
@@ -142,7 +143,10 @@ export default function GitHubConnect() {
     void handleCallback();
   }, [dispatch]);
 
-  const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, userInfo);
+  const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, {
+    jwtGithubUserId,
+    githubUsername: userInfo?.githubUsername,
+  });
 
   // Full-page spinner only for OAuth connect loading — keep connected UI for default-access grants.
   if (githubConnectState.state !== State.idle && !storedResult) {
