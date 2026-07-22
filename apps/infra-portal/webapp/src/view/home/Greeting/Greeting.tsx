@@ -21,7 +21,7 @@ import { useEffect, useState } from "react";
 import { Role, UserState } from "@root/src/slices/authSlice/auth";
 import { SnackMessage } from "@config/constant";
 import { enqueueSnackbarMessage } from "@slices/commonSlice/common";
-import { useAppDispatch } from "@slices/store";
+import { useAppDispatch, useAppSelector } from "@slices/store";
 import { getUserInfo } from "@slices/userSlice/user";
 import {
   GitHubConnectResult,
@@ -45,6 +45,7 @@ function getGreeting(): string {
 export default function Greeting({ user, roles }: GreetingProps) {
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
 
   const accent = theme.palette.primary.main;
   const accentBg = alpha(accent, 0.1);
@@ -86,7 +87,10 @@ export default function Greeting({ user, roles }: GreetingProps) {
 
   const { isConnected: isGithubConnected, githubUsername } = resolveGitHubConnectionStatus(
     connectResult,
-    user.userInfo,
+    {
+      jwtGithubUserId,
+      githubUsername: user.userInfo?.githubUsername,
+    },
   );
 
   const chipSx = {

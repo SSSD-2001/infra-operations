@@ -17,41 +17,8 @@
 import infra_portal.authorization;
 import infra_portal.database as db;
 import infra_portal.github as gh;
-import infra_portal.scim;
 
 import ballerina/log;
-
-# An in-process fallback record of a user's GitHub link, keyed by email.
-type GithubLinkEntry readonly & record {|
-    string githubUserId;
-    string? githubUsername;
-|};
-
-# In-process fallback store for GitHub account links, used when the SCIM operations service is
-# unreachable (e.g. in local development) so the link survives page refreshes for the lifetime of
-# this backend process, even though it isn't persisted to SCIM/Asgardeo.
-isolated map<GithubLinkEntry> githubLinkByEmail = {};
-
-# Stores a user's GitHub link in the in-process fallback store.
-#
-# + email - Email of the user to link
-# + githubUserId - GitHub user ID to associate with the email
-# + githubUsername - GitHub username to associate with the email
-isolated function storeGithubLink(string email, string githubUserId, string? githubUsername) {
-    lock {
-        githubLinkByEmail[email] = {githubUserId, githubUsername};
-    }
-}
-
-# Reads a user's GitHub link from the in-process fallback store, if present.
-#
-# + email - Email of the user to look up
-# + return - The stored GitHub link entry, or nil if not present
-isolated function getStoredGithubLink(string email) returns GithubLinkEntry? {
-    lock {
-        return githubLinkByEmail[email];
-    }
-}
 
 # Create a new GitHub repository and add requested parameters.
 #
@@ -175,39 +142,14 @@ public isolated function getGhStatusReport(gh:GitHubOperationResult[] gitHubOper
     return reportMap;
 }
 
-# Resolves the GitHub account link status for a user.
+# Resolves the GitHub account link status for a user from the JWT claim.
 #
 # + userInfo - Authenticated user's JWT payload
 # + return - Tuple of GitHub user ID and username; both nil if not linked or the username lookup failed
 public isolated function resolveGithubLinkStatus(authorization:CustomJwtPayload userInfo) returns [string?, string?] {
     string? githubUserId = userInfo.githubUserId;
-    string? githubUsername = ();
-
-    if githubUserId is () {
-        // Falls back to the in-process link store first, since the SCIM operations service may be
-        // unreachable (e.g. in local development) and the JWT claim is stale until the next token
-        // refresh.
-        GithubLinkEntry? storedLink = getStoredGithubLink(userInfo.email);
-        if storedLink is GithubLinkEntry {
-            githubUserId = storedLink.githubUserId;
-            githubUsername = storedLink.githubUsername;
-        } else {
-            scim:User[]|error scimUsers = scim:searchUser(userInfo.email);
-            if scimUsers is error {
-                log:printError("Error while checking GitHub link status via SCIM", scimUsers,
-                        email = userInfo.email);
-            } else if scimUsers.length() > 0 {
-                githubUserId = scimUsers[0].urn\:scim\:schemas\:extension\:custom\:User?.githubUserId;
-            }
-        }
-    }
-
     if githubUserId is () {
         return [(), ()];
-    }
-
-    if githubUsername is string {
-        return [githubUserId, githubUsername];
     }
 
     gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);

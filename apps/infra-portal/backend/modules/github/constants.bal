@@ -43,24 +43,3 @@ const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 
 # Readonly team slug.
 const string READONLY_TEAM_SLUG = "wso2-readonly";
-
-# Default team access for permanent employees.
-public configurable OrganizationAndTeam[] permanentDefaultTeamAccess = [
-    {orgName: "wso2-support", teamSlug: "wso2-support-readonly"},
-    {orgName: "wso2", teamSlug: "wso2-readonly"},
-    {orgName: "wso2-extensions", teamSlug: "wso2-readonly"}
-];
-
-# Extra team access for Customer Success permanent employees.
-public configurable OrganizationAndTeam[] csTeamAccess = [
-    {orgName: "wso2-cs", teamSlug: "cs-team"},
-    {orgName: "wso2-enterprise", teamSlug: "customer-success-team"}
-];
-
-# Default team access for interns.
-public configurable OrganizationAndTeam[] internsDefaultTeamAccess = [
-    {orgName: "wso2", teamSlug: "wso2-all-interns"},
-    {orgName: "wso2-extensions", teamSlug: "wso2-all-interns"},
-    {orgName: "wso2-support", teamSlug: "wso2-all-interns"},
-    {orgName: "ballerina-platform", teamSlug: "wso2-all-interns"}
-];

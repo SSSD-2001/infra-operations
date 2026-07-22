@@ -53,8 +53,6 @@ public type UserInfoResponse record {|
     string? employmentType;
     # User Privileges
     int[] privileges;
-    # GitHub user ID if the employee has linked their GitHub account
-    string? githubUserId = ();
     # GitHub username if the employee has linked their GitHub account
     string? githubUsername = ();
 |};

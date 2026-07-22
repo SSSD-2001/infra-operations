@@ -2,7 +2,7 @@
 
 ### Default repository access
 
-After a user verifies their GitHub account, `PUT /set-default-repository-access` grants default org/team memberships based on HR employment type. The org/team lists are Ballerina configurables in the `github` module (see `modules/github/constants.bal`).
+After a user verifies their GitHub account, `PUT /set-default-repository-access` grants default org/team memberships based on HR employment type. The org/team lists are Ballerina configurables in the `github` module (see `modules/github/gh_function.bal`).
 
 Built-in defaults are production org/team slugs:
 

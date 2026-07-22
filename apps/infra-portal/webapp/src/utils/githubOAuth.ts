@@ -40,16 +40,19 @@ export interface GitHubConnectionStatus {
   githubUsername?: string;
 }
 
-/** Derives connected state and username from a stored OAuth result and persisted userInfo. */
+/** Derives connected state and username from a stored OAuth result, JWT claim, and user-info username. */
 export const resolveGitHubConnectionStatus = (
   storedResult: GitHubConnectResult | null | undefined,
-  userInfo?: { githubUserId?: string | null; githubUsername?: string | null } | null,
+  options?: {
+    jwtGithubUserId?: string | null;
+    githubUsername?: string | null;
+  } | null,
 ): GitHubConnectionStatus => {
   const isConnected =
-    storedResult?.status === "verified" || Boolean(userInfo?.githubUserId);
+    storedResult?.status === "verified" || Boolean(options?.jwtGithubUserId);
   const githubUsername =
     (storedResult?.status === "verified" ? storedResult.githubUsername : undefined) ??
-    userInfo?.githubUsername ??
+    options?.githubUsername ??
     undefined;
   return { isConnected, githubUsername: githubUsername ?? undefined };
 };
