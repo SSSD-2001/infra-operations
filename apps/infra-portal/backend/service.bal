@@ -1930,12 +1930,13 @@ service http:InterceptableService / on new http:Listener(8090) {
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
-                // The GitHub identity check with GitHub already succeeded at this point; a downstream
-                // SCIM outage shouldn't fail the whole connect flow for the user. Log and continue so the
-                // user still sees a verified result — the JWT claim updates after the next token refresh.
-                log:printError(
-                        "Error while updating GitHub user ID for the user! Continuing without persisting the link.",
-                        updatedUser, email = userInfo.email);
+                string customError = "Error while updating GitHub user ID for the user!";
+                log:printError(customError, updatedUser, email = userInfo.email);
+                return <http:InternalServerError>{
+                    body: {
+                        message: customError
+                    }
+                };
             } else if updatedUser is () {
                 string customError = "User not found for the email!";
                 log:printError(customError, email = userInfo.email);
