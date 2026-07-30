@@ -122,13 +122,15 @@ service http:InterceptableService / on new http:Listener(8090) {
             privileges.push(authorization:ADMIN_PRIVILEGE);
         }
 
-        [string?, string?] [_, githubUsername] = resolveGithubLinkStatus(userInfo);
-
-        UserInfoResponse userInfoResponse = {...loggedInUser, privileges, githubUsername};
-
-        error? cacheError = cache.put(userInfo.email, userInfoResponse);
-        if cacheError is error {
-            log:printError("An error occurred while writing user info to the cache", cacheError);
+        [string?, string?] [githubUserId, githubUsername] = resolveGithubLinkStatus(userInfo);
+        UserInfoResponse userInfoResponse = {employeeId: loggedInUser.employeeId, workEmail: loggedInUser.workEmail, firstName: loggedInUser.firstName, lastName: loggedInUser.lastName, jobRole: loggedInUser.jobRole, employeeThumbnail: loggedInUser.employeeThumbnail, department: loggedInUser.department, team: loggedInUser.team, employmentType: loggedInUser.employmentType, privileges: privileges, githubUserId: githubUserId, githubUsername: githubUsername};
+        
+        // Skip caching when linked but username lookup failed, so the next request retries.
+        if githubUserId is () || githubUsername is string {
+            error? cacheError = cache.put(userInfo.email, userInfoResponse);
+            if cacheError is error {
+                log:printError("An error occurred while writing user info to the cache", cacheError);
+            }
         }
 
         return userInfoResponse;
@@ -1825,10 +1827,12 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         string gitHubUserName = resolvedGithubUsername;
 
-        gh:AddOrUpdateTeamMemberResponse|error result;
+        //Keep the success type and remove the error result
+        // Collect inputs based on employment type
+        gh:AddOrUpdateTeamMemberInformationInput[] inputs;
+
         if employee.employmentType == PERMANENT {
-            gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from gh:OrganizationAndTeam organizationAndTeam in gh:permanentDefaultTeamAccess
+            inputs = from gh:OrganizationAndTeam organizationAndTeam in gh:permanentDefaultTeamAccess
                 select {
                     orgName: organizationAndTeam.orgName,
                     teamSlug: organizationAndTeam.teamSlug,
@@ -1848,18 +1852,14 @@ service http:InterceptableService / on new http:Listener(8090) {
 
                 inputs.push(...customerSuccessInputs);
             }
-            result = gh:addOrUpdateTeamMemberships(inputs);
         } else if employee.employmentType == INTERNSHIP {
-            gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from gh:OrganizationAndTeam organizationAndTeam in gh:internsDefaultTeamAccess
+            inputs = from gh:OrganizationAndTeam organizationAndTeam in gh:internsDefaultTeamAccess
                 select {
                     orgName: organizationAndTeam.orgName,
                     teamSlug: organizationAndTeam.teamSlug,
                     userName: gitHubUserName,
                     role: gh:MEMBER
                 };
-
-            result = gh:addOrUpdateTeamMemberships(inputs);
         } else {
             string actualType = employee.employmentType ?: "null";
             string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
@@ -1871,18 +1871,22 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        if result is error {
+        // Call the function ONCE and handle errors immediately
+        gh:AddOrUpdateTeamMemberResponse|error membershipResult = gh:addOrUpdateTeamMemberships(inputs);
+
+        if membershipResult is error {
             string customError = "Error while adding/updating team membership for the employee!";
-            log:printError(customError, result);
+            log:printError(customError, membershipResult);
             return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
             };
         }
-        return result;
-    }
 
+        // Return only the success type
+        return membershipResult;
+   }
     # Exchange the authorization code for an access token.
     #
     # + payload - The authorization code received from GitHub after user authorization
@@ -1930,7 +1934,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
-                string customError = "Error while updating GitHub user ID for the user!";
+                string customError = "Error while updating GitHub user ID for the IDP!";
                 log:printError(customError, updatedUser, email = userInfo.email);
                 return <http:InternalServerError>{
                     body: {
