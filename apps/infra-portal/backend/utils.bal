@@ -142,22 +142,25 @@ public isolated function getGhStatusReport(gh:GitHubOperationResult[] gitHubOper
     return reportMap;
 }
 
-# Resolves the GitHub account link status for a user from the JWT claim.
-#
-# + userInfo - Authenticated user's JWT payload
-# + return - Tuple of GitHub user ID and username; both nil if not linked or the username lookup failed
-public isolated function resolveGithubLinkStatus(authorization:CustomJwtPayload userInfo) returns [string?, string?] {
+# Represents a successfully linked and resolved GitHub account
+public type GithubLink record {|
+    string id;
+    string username?; // Optional if fetch failed
+|};
+
+public isolated function resolveGithubLinkStatus(authorization:CustomJwtPayload userInfo) returns GithubLink? {
     string? githubUserId = userInfo.githubUserId;
     if githubUserId is () {
-        return [(), ()];
+        return (); // Clearly signals: "No link exists"
     }
 
     gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
     if githubUser is error {
-        log:printError("Error while fetching GitHub username for user-info", githubUser, email = userInfo.email);
-        return [githubUserId, ()];
+        log:printError("Error while fetching GitHub username for user-info", 'error = githubUser, email = userInfo.email);
+        return {id: githubUserId};
     }
-    return [githubUserId, githubUser.login];
+
+    return {id: githubUserId, username: githubUser.login};
 }
 
 # Function to add Default teams to team list.
