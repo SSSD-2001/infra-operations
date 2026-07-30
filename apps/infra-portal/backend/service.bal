@@ -122,9 +122,24 @@ service http:InterceptableService / on new http:Listener(8090) {
             privileges.push(authorization:ADMIN_PRIVILEGE);
         }
 
-        [string?, string?] [githubUserId, githubUsername] = resolveGithubLinkStatus(userInfo);
-        UserInfoResponse userInfoResponse = {employeeId: loggedInUser.employeeId, workEmail: loggedInUser.workEmail, firstName: loggedInUser.firstName, lastName: loggedInUser.lastName, jobRole: loggedInUser.jobRole, employeeThumbnail: loggedInUser.employeeThumbnail, department: loggedInUser.department, team: loggedInUser.team, employmentType: loggedInUser.employmentType, privileges: privileges, githubUserId: githubUserId, githubUsername: githubUsername};
-        
+        GithubLink? githubLink = resolveGithubLinkStatus(userInfo);
+        string? githubUserId = githubLink?.id;
+        string? githubUsername = githubLink?.username;
+        UserInfoResponse userInfoResponse = {
+            employeeId: loggedInUser.employeeId,
+            workEmail: loggedInUser.workEmail,
+            firstName: loggedInUser.firstName,
+            lastName: loggedInUser.lastName,
+            jobRole: loggedInUser.jobRole,
+            employeeThumbnail: loggedInUser.employeeThumbnail,
+            department: loggedInUser.department,
+            team: loggedInUser.team,
+            employmentType: loggedInUser.employmentType,
+            privileges: privileges,
+            githubUserId: githubUserId,
+            githubUsername: githubUsername
+        };
+
         // Skip caching when linked but username lookup failed, so the next request retries.
         if githubUserId is () || githubUsername is string {
             error? cacheError = cache.put(userInfo.email, userInfoResponse);
@@ -1807,15 +1822,15 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        // Prefer JWT claim — the Asgardeo JWT claim stays stale until
-        // the next token refresh after verify-email writes githubUserId.
-        [string?, string?] [resolvedGithubUserId, resolvedGithubUsername] = resolveGithubLinkStatus(userInfo);
-        if resolvedGithubUserId is () {
+        // Prefer live GitHub profile — JWT githubUserId claim can be stale until refresh.
+        GithubLink? githubLink = resolveGithubLinkStatus(userInfo);
+        if githubLink is () {
             return <http:Forbidden>{
                 body: {message: "GitHub account is not verified."}
             };
         }
 
+        string? resolvedGithubUsername = githubLink.username;
         if resolvedGithubUsername is () {
             string customError = "Error while resolving GitHub username!";
             log:printError(customError, email = userInfo.email);
@@ -1826,7 +1841,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
         string gitHubUserName = resolvedGithubUsername;
-
+        
         //Keep the success type and remove the error result
         // Collect inputs based on employment type
         gh:AddOrUpdateTeamMemberInformationInput[] inputs;
