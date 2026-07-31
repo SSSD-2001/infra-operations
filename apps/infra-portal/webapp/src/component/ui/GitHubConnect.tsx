@@ -13,17 +13,20 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import { useAuthContext } from "@asgardeo/auth-react";
 import { Box, Button, CircularProgress, Typography } from "@mui/material";
 
 import { useEffect, useState } from "react";
 
 import { GITHUB_OAUTH_STATE_KEY, STATE_EXPIRY_MS, SnackMessage } from "@config/constant";
 import { State } from "@root/src/types/types";
+import { setUserAuthData } from "@slices/authSlice/auth";
 import {
   connectGitHub,
   setDefaultRepositoryAccess,
 } from "@slices/githubOauthAppSlice/githubOauth";
 import { useAppDispatch, useAppSelector } from "@slices/store";
+import { APIService } from "@utils/apiService";
 import {
   DEFAULT_GITHUB_OAUTH_RETURN_PATH,
   GitHubConnectResult,
@@ -52,6 +55,7 @@ export default function GitHubConnect() {
   const userInfo = useAppSelector((state) => state.user.userInfo);
   const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
   const dispatch = useAppDispatch();
+  const { refreshAccessToken, getIDToken, getDecodedIDToken, getBasicUserInfo } = useAuthContext();
 
   const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(() =>
     consumeStoredGitHubConnectResult(),
@@ -115,7 +119,21 @@ export default function GitHubConnect() {
       const result = await dispatch(connectGitHub({ code }));
 
       if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
-        // Grant default team memberships immediately after a successful verify.
+        // SCIM now has githubUserId; force-refresh so the JWT claim is present before grant.
+        await refreshAccessToken();
+        const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
+          getIDToken(),
+          getDecodedIDToken(),
+          getBasicUserInfo(),
+        ]);
+        APIService.updateIdToken(idToken);
+        dispatch(
+          setUserAuthData({
+            userInfo: basicUserInfo,
+            decodedIdToken,
+          }),
+        );
+
         const grantResult = await dispatch(setDefaultRepositoryAccess());
         const accessGranted = setDefaultRepositoryAccess.fulfilled.match(grantResult);
         navigateWithGitHubConnectResult(returnPath, {
@@ -145,7 +163,6 @@ export default function GitHubConnect() {
 
   const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, {
     jwtGithubUserId,
-    githubUsername: userInfo?.githubUsername,
   });
 
   // Full-page spinner only for OAuth connect loading — keep connected UI for default-access grants.

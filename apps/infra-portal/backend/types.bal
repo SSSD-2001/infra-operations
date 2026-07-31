@@ -55,8 +55,6 @@ public type UserInfoResponse record {|
     int[] privileges;
     # GitHub user ID if the employee has linked their GitHub account
     string? githubUserId;
-    # GitHub username if the employee has linked their GitHub account
-    string? githubUsername;
 |};
 
 # Repository Request List.
