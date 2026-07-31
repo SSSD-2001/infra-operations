@@ -14,11 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import infra_portal.authorization;
 import infra_portal.database as db;
 import infra_portal.github as gh;
-
-import ballerina/log;
 
 # Create a new GitHub repository and add requested parameters.
 #
@@ -140,27 +137,6 @@ public isolated function getGhStatusReport(gh:GitHubOperationResult[] gitHubOper
         reportMap[result.operation] = result.status;
     }
     return reportMap;
-}
-
-# Represents a successfully linked and resolved GitHub account
-public type GithubLink record {|
-    string id;
-    string username?; // Optional if fetch failed
-|};
-
-public isolated function resolveGithubLinkStatus(authorization:CustomJwtPayload userInfo) returns GithubLink? {
-    string? githubUserId = userInfo.githubUserId;
-    if githubUserId is () {
-        return (); // Clearly signals: "No link exists"
-    }
-
-    gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
-    if githubUser is error {
-        log:printError("Error while fetching GitHub username for user-info", 'error = githubUser, email = userInfo.email);
-        return {id: githubUserId};
-    }
-
-    return {id: githubUserId, username: githubUser.login};
 }
 
 # Function to add Default teams to team list.

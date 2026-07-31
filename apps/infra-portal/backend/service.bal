@@ -122,9 +122,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             privileges.push(authorization:ADMIN_PRIVILEGE);
         }
 
-        GithubLink? githubLink = resolveGithubLinkStatus(userInfo);
-        string? githubUserId = githubLink?.id;
-        string? githubUsername = githubLink?.username;
+        string? githubUserId = userInfo.githubUserId;
         UserInfoResponse userInfoResponse = {
             employeeId: loggedInUser.employeeId,
             workEmail: loggedInUser.workEmail,
@@ -135,17 +133,13 @@ service http:InterceptableService / on new http:Listener(8090) {
             department: loggedInUser.department,
             team: loggedInUser.team,
             employmentType: loggedInUser.employmentType,
-            privileges: privileges,
-            githubUserId: githubUserId,
-            githubUsername: githubUsername
+            privileges,
+            githubUserId
         };
 
-        // Skip caching when linked but username lookup failed, so the next request retries.
-        if githubUserId is () || githubUsername is string {
-            error? cacheError = cache.put(userInfo.email, userInfoResponse);
-            if cacheError is error {
-                log:printError("An error occurred while writing user info to the cache", cacheError);
-            }
+        error? cacheError = cache.put(userInfo.email, userInfoResponse);
+        if cacheError is error {
+            log:printWarn("An error occurred while writing user info to the cache", cacheError);
         }
 
         return userInfoResponse;
@@ -1822,28 +1816,25 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        // Prefer live GitHub profile — JWT githubUserId claim can be stale until refresh.
-        GithubLink? githubLink = resolveGithubLinkStatus(userInfo);
-        if githubLink is () {
+        string? githubUserId = userInfo.githubUserId;
+        if githubUserId is () {
             return <http:Forbidden>{
                 body: {message: "GitHub account is not verified."}
             };
         }
 
-        string? resolvedGithubUsername = githubLink.username;
-        if resolvedGithubUsername is () {
+        gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
+        if githubUser is error {
             string customError = "Error while resolving GitHub username!";
-            log:printError(customError, email = userInfo.email);
+            log:printError(customError, githubUser, email = userInfo.email);
             return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
             };
         }
-        string gitHubUserName = resolvedGithubUsername;
-        
-        //Keep the success type and remove the error result
-        // Collect inputs based on employment type
+        string gitHubUserName = githubUser.login;
+
         gh:AddOrUpdateTeamMemberInformationInput[] inputs;
 
         if employee.employmentType == PERMANENT {
@@ -1886,9 +1877,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        // Call the function ONCE and handle errors immediately
         gh:AddOrUpdateTeamMemberResponse|error membershipResult = gh:addOrUpdateTeamMemberships(inputs);
-
         if membershipResult is error {
             string customError = "Error while adding/updating team membership for the employee!";
             log:printError(customError, membershipResult);
@@ -1898,8 +1887,6 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
-
-        // Return only the success type
         return membershipResult;
    }
     # Exchange the authorization code for an access token.
@@ -1969,7 +1956,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             // Invalidate the cached user info so the next fetch reflects the newly linked GitHub account.
             cache:Error? cacheInvalidateError = cache.invalidate(userInfo.email);
             if cacheInvalidateError is cache:Error {
-                log:printError(
+                log:printWarn(
                         "An error occurred while invalidating cached user info", cacheInvalidateError,
                         email = userInfo.email);
             }

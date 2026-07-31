@@ -38,6 +38,7 @@ interface AuthState {
   mode: "active" | "maintenance";
   statusMessage: string | null;
   userInfo: BasicUserInfo | null;
+  githubUserId?: string | null
   decodedIdToken: ExtendedDecodedIDTokenPayload | null;
   roles: Role[];
 }
@@ -62,7 +63,6 @@ export interface UserInfoInterface {
   employeeThumbnail: string | null;
   jobRole: string;
   privileges: number[];
-  githubUsername?: string | null;
 }
 
 const initialState: AuthState = {
