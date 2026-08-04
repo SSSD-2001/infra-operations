@@ -1928,11 +1928,6 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        // Note: this endpoint is only ever called with a freshly-issued OAuth code right after the
-        // user completes the GitHub authorize redirect, so it must always exchange that code and
-        // trust its result. Short-circuiting on an existing link here (e.g. a stale JWT claim from a
-        // previous connect on a shared machine) would let a new connect attempt return someone else's
-        // already-linked GitHub identity without ever validating the user's own code.
         gh:EmailVerificationResponse|error result
             = gh:verifyCompanyEmail({code: payload.code, email: userInfo.email});
 
@@ -1952,7 +1947,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
-                string customError = "Error while updating GitHub user ID for the IDP!";
+                string customError = "Error while updating GitHub user ID in the IDP!";
                 log:printError(customError, updatedUser, email = userInfo.email);
                 return <http:InternalServerError>{
                     body: {
