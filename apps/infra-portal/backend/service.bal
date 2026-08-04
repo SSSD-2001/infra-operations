@@ -123,6 +123,21 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         string? githubUserId = userInfo.githubUserId;
+        string? githubUsername = ();
+        if githubUserId is string {
+            gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
+            if githubUser is error {
+                string customError = "Error while fetching GitHub username for user-info!";
+                log:printError(customError, 'error = githubUser, email = userInfo.email);
+                return <http:InternalServerError>{
+                    body: {
+                        message: customError
+                    }
+                };
+            }
+            githubUsername = githubUser.login;
+        }
+
         UserInfoResponse userInfoResponse = {
             employeeId: loggedInUser.employeeId,
             workEmail: loggedInUser.workEmail,
@@ -134,7 +149,8 @@ service http:InterceptableService / on new http:Listener(8090) {
             team: loggedInUser.team,
             employmentType: loggedInUser.employmentType,
             privileges,
-            githubUserId
+            githubUserId,
+            githubUsername
         };
 
         error? cacheError = cache.put(userInfo.email, userInfoResponse);
@@ -1930,7 +1946,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        gh:EmailVerificationResponse {status, githubUserId, githubUsername} = result;
+        gh:EmailVerificationResponse {status, githubUserId} = result;
         if status == "verified" && githubUserId is string {
             scim:User|error? updatedUser
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
