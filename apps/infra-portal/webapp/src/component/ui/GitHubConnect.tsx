@@ -163,6 +163,7 @@ export default function GitHubConnect() {
 
   const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, {
     jwtGithubUserId,
+    githubUsername: userInfo?.githubUsername,
   });
 
   // Full-page spinner only for OAuth connect loading — keep connected UI for default-access grants.

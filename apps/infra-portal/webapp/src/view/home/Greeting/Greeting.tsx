@@ -89,6 +89,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
     connectResult,
     {
       jwtGithubUserId,
+      githubUsername: user.userInfo?.githubUsername,
     },
   );
 
