@@ -1909,7 +1909,7 @@ service http:InterceptableService / on new http:Listener(8090) {
     #
     # + payload - The authorization code received from GitHub after user authorization
     # + return - Access token or error
-    isolated resource function post github/verify\-email(http:RequestContext ctx, VerifyEmailPayload payload)
+    isolated resource function post github/verify\-and\-persist\-user(http:RequestContext ctx, VerifyEmailPayload payload)
         returns gh:EmailVerificationResponse|http:Forbidden|http:InternalServerError {
 
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
