@@ -13,22 +13,31 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import { useAuthContext } from "@asgardeo/auth-react";
 import { GitHub as GitHubIcon } from "@mui/icons-material";
-import { Box, Chip, Typography, alpha, useTheme } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, Typography, alpha, useTheme } from "@mui/material";import { useEffect, useMemo, useState } from "react";
 
-import { useEffect, useState } from "react";
-
-import { Role, UserState } from "@root/src/slices/authSlice/auth";
-import { SnackMessage } from "@config/constant";
+import { GITHUB_OAUTH_STATE_KEY, SnackMessage } from "@config/constant";
+import { useConfirmationModalContext } from "@root/src/context";
+import { Role, UserState, setUserAuthData } from "@root/src/slices/authSlice/auth";
+import { ConfirmationType } from "@root/src/types/types";
 import { enqueueSnackbarMessage } from "@slices/commonSlice/common";
+import {
+  connectGitHub,
+  fetchDefaultRepositoryAccess,
+  setDefaultRepositoryAccess,
+} from "@slices/githubOauthAppSlice/githubOauth";
 import { useAppDispatch, useAppSelector } from "@slices/store";
 import { getUserInfo } from "@slices/userSlice/user";
+import { APIService } from "@utils/apiService";
 import {
+  consumePendingOAuthCode,
   GitHubConnectResult,
   consumeStoredGitHubConnectResult,
   resolveGitHubConnectionStatus,
   startGitHubOAuth,
 } from "@utils/githubOAuth";
+
 
 interface GreetingProps {
   user: UserState;
@@ -46,20 +55,115 @@ export default function Greeting({ user, roles }: GreetingProps) {
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
+  
+  const dialogContext = useConfirmationModalContext();
+  const handleConnectClick = () => {
+    dialogContext.showConfirmation(
+      "Connect with GitHub",
+      (
+        <>
+          <Typography component="span" display="block" variant="body2">
+            Before connecting,{" "}
+            <strong>ensure your company email is added and verified</strong> on
+            your GitHub account.
+          </Typography>
+          <Typography component="span" display="block" variant="body2" sx={{ mt: 1 }}>
+            Do not close this tab while the page loads.
+          </Typography>
+        </>
+      ),
+      ConfirmationType.accept,
+      () => startGitHubOAuth("/"),
+      "Continue",
+      "Cancel",
+    );
+  };
 
   const accent = theme.palette.primary.main;
   const accentBg = alpha(accent, 0.1);
 
   // Picked up once when returning from the GitHub OAuth redirect, before the next /user-info fetch settles.
+  const { refreshAccessToken, getIDToken, getDecodedIDToken, getBasicUserInfo } = useAuthContext();
+
   const [connectResult] = useState<GitHubConnectResult | null>(() =>
     consumeStoredGitHubConnectResult(),
   );
+  const pendingCode = useMemo(() => consumePendingOAuthCode(), []);
+  const [isPostConnectLoading, setIsPostConnectLoading] = useState(
+    () => Boolean(pendingCode) || connectResult?.status === "verified",
+  );
+  const [localUsername, setLocalUsername] = useState<string | undefined>();
 
   useEffect(() => {
-    if (!connectResult) return;
+    if (!pendingCode) return;
+
+    const run = async () => {
+      setIsPostConnectLoading(true);
+      try {
+        sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
+        const result = await dispatch(connectGitHub({ code: pendingCode }));
+
+        if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
+          try {
+            await refreshAccessToken();
+          } catch {
+            // Session still valid for UI; grant may fail if JWT lacks githubUserId
+          }
+          const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
+            getIDToken(),
+            getDecodedIDToken(),
+            getBasicUserInfo(),
+          ]);
+          APIService.updateIdToken(idToken);
+          dispatch(setUserAuthData({ userInfo: basicUserInfo, decodedIdToken }));
+
+          const grantResult = await dispatch(setDefaultRepositoryAccess());
+          const accessGranted = setDefaultRepositoryAccess.fulfilled.match(grantResult);
+
+          if (result.payload.githubUsername) {
+            setLocalUsername(result.payload.githubUsername);
+          }
+
+          await dispatch(getUserInfo());
+
+          if (accessGranted) {
+            await dispatch(fetchDefaultRepositoryAccess());
+          } else {
+            dispatch(
+              enqueueSnackbarMessage({
+                message: SnackMessage.error.setDefaultRepositoryAccessMessage,
+                type: "error",
+              }),
+            );
+          }
+        } else if (connectGitHub.fulfilled.match(result)) {
+          dispatch(
+            enqueueSnackbarMessage({
+              message: SnackMessage.error.githubUnverifiedMessage,
+              type: "error",
+            }),
+          );
+        } else {
+          dispatch(
+            enqueueSnackbarMessage({
+              message: SnackMessage.error.githubConnectMessage,
+              type: "error",
+            }),
+          );
+        }
+      } finally {
+        setIsPostConnectLoading(false);
+      }
+    };
+
+    void run();
+  }, [pendingCode, dispatch]);
+
+  useEffect(() => {
+    if (!connectResult || pendingCode) return;
     if (connectResult.status === "verified") {
-      // Default access is already granted on the /github/callback page before navigation.
-      dispatch(getUserInfo());
+      setIsPostConnectLoading(true);
+      void dispatch(getUserInfo()).finally(() => setIsPostConnectLoading(false));
       if (connectResult.defaultAccessGranted === false && connectResult.defaultAccessError) {
         dispatch(
           enqueueSnackbarMessage({
@@ -76,7 +180,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
         }),
       );
     }
-  }, [connectResult, dispatch]);
+  }, [connectResult, pendingCode, dispatch]);
 
   const firstName = user.userInfo?.firstName ?? "there";
   const topRole = roles.includes(Role.ADMIN)
@@ -89,7 +193,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
     connectResult,
     {
       jwtGithubUserId,
-      githubUsername: user.userInfo?.githubUsername,
+      githubUsername: localUsername ?? user.userInfo?.githubUsername,
     },
   );
 
@@ -149,51 +253,84 @@ export default function Greeting({ user, roles }: GreetingProps) {
           {firstName}
         </Typography>
       </Typography>
-      <Chip
-        label={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: accent, mb: 0.1 }} />
-            {topRole}
-          </Box>
-        }
-        sx={{ ...chipSx, mt: 0.75 }}
-      />
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, flexWrap: "wrap" }}>
+        <Chip
+          label={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ width: 5, height: 5, borderRadius: "50%", bgcolor: accent, mb: 0.1 }} />
+              {topRole}
+            </Box>
+          }
+          sx={chipSx}
+        />
+
+        {isGithubConnected ? (
+          <Chip
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <GitHubIcon sx={{ fontSize: 13 }} />
+                {githubUsername ? `@${githubUsername}` : "Connected"}
+              </Box>
+            }
+            sx={{
+              ...chipSx,
+              background: alpha(theme.palette.success.main, 0.12),
+              color: theme.palette.success.dark,
+              border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
+            }}
+          />
+        ) : (
+          <Chip
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <GitHubIcon sx={{ fontSize: 13 }} />
+                Not Connected
+              </Box>
+            }
+            sx={{
+              ...chipSx,
+              background: alpha(theme.palette.neutral["1200"] ?? theme.palette.grey[600], 0.12),
+              color: theme.palette.customText.primary.p3.active,
+              border: `1px solid ${alpha(theme.palette.grey[500], 0.35)}`,
+            }}
+          />
+        )}
+      </Box>
+
       <Typography fontSize={15} color={theme.palette.customText.primary.p3.active} mt={0.6}>
         Manage your infrastructure requests and access from one place.
       </Typography>
-      <Chip
-        label={
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <GitHubIcon sx={{ fontSize: 13 }} />
-            {isGithubConnected
-              ? githubUsername
-                ? `Connected as ${githubUsername}`
-                : "Connected"
-              : "Connect with GitHub"}
-          </Box>
-        }
-        onClick={isGithubConnected ? undefined : () => startGitHubOAuth("/")}
-        sx={{
-          ...chipSx,
-          mt: 1,
-          background: alpha(theme.palette.success.main, 0.12),
-          color: theme.palette.success.dark,
-          border: `1px solid ${alpha(theme.palette.success.main, 0.35)}`,
-          cursor: isGithubConnected ? "default" : "pointer",
-          transition: "opacity 0.18s ease, background 0.18s ease",
-          ...(!isGithubConnected && {
-            "&:hover": {
-              opacity: 1,
-              background: alpha(theme.palette.success.main, 0.2),
+
+      {(!isGithubConnected || isPostConnectLoading) && (
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={
+            isPostConnectLoading ? (
+              <CircularProgress size={14} thickness={5} sx={{ color: "#fff" }} />
+            ) : (
+              <GitHubIcon sx={{ fontSize: 16 }} />
+            )
+          }
+          disabled={isPostConnectLoading}
+          onClick={handleConnectClick}
+          sx={{
+            mt: 1,
+            textTransform: "none",
+            borderRadius: 1,
+            fontSize: 13,
+            fontWeight: 500,
+            color: "#fff",
+            "&.Mui-disabled": {
+              color: "#fff",
+              backgroundColor: (theme) => theme.palette.primary.main,
+              opacity: 0.9,
             },
-          }),
-        }}
-      />
-      {!isGithubConnected && (
-        <Typography fontSize={12} color={theme.palette.customText.primary.p3.active} mt={0.75}>
-          Before connecting, ensure your company email is added and verified on your GitHub account.
-        </Typography>
+          }}
+        >
+          {isPostConnectLoading ? "Connecting..." : "Connect with GitHub"}
+        </Button>
       )}
-    </Box>
-  );
-}
+      </Box>
+    );
+  }

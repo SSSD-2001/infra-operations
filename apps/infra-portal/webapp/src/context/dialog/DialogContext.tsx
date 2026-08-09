@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 import CloseIcon from "@mui/icons-material/Close";
-import DoneIcon from "@mui/icons-material/Done";
 import SaveAltIcon from "@mui/icons-material/SaveAlt";
 import SendIcon from "@mui/icons-material/Send";
 import LoadingButton from "@mui/lab/LoadingButton";
@@ -117,7 +116,6 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
   };
 
   const handleCancel = () => {
-    Reset();
     onHide();
   };
 
@@ -131,11 +129,16 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
         {props.children}
         {content && (
           <Dialog
-            open={show}
-            sx={{
-              ".MuiDialog-paper": { maxWidth: 350, borderRadius: 3 },
-              backdropFilter: "blur(10px)",
-            }}
+              open={show}
+              slotProps={{
+                transition: {
+                  onExited: Reset,
+                },
+              }}
+              sx={{
+                ".MuiDialog-paper": { maxWidth: 520, borderRadius: 3 },
+                backdropFilter: "blur(10px)",
+              }}
           >
             <DialogTitle
               variant="h5"
@@ -205,9 +208,7 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
                       <SaveAltIcon />
                     ) : content.type === "send" ? (
                       <SendIcon />
-                    ) : (
-                      <DoneIcon />
-                    )
+                    ) : undefined
                   }
                 >
                   {content?.okText ? content.okText : "Yes"}
