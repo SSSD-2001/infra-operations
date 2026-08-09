@@ -13,20 +13,12 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { useAuthContext } from "@asgardeo/auth-react";
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
-
+import { Box, Button, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-import { GITHUB_OAUTH_STATE_KEY, STATE_EXPIRY_MS, SnackMessage } from "@config/constant";
-import { State } from "@root/src/types/types";
-import { setUserAuthData } from "@slices/authSlice/auth";
-import {
-  connectGitHub,
-  setDefaultRepositoryAccess,
-} from "@slices/githubOauthAppSlice/githubOauth";
-import { useAppDispatch, useAppSelector } from "@slices/store";
-import { APIService } from "@utils/apiService";
+import { GITHUB_OAUTH_STATE_KEY, STATE_EXPIRY_MS } from "@config/constant";
+import { useAppSelector } from "@slices/store";
 import {
   DEFAULT_GITHUB_OAUTH_RETURN_PATH,
   GitHubConnectResult,
@@ -35,27 +27,13 @@ import {
   navigateWithGitHubConnectResult,
   resolveGitHubConnectionStatus,
   startGitHubOAuth,
+  stashPendingOAuthCode,
 } from "@utils/githubOAuth";
 
-function extractDefaultAccessError(payload: unknown): string {
-  if (typeof payload === "string" && payload.length > 0) {
-    return payload;
-  }
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = (payload as { message?: unknown }).message;
-    if (typeof message === "string" && message.length > 0) {
-      return message;
-    }
-  }
-  return SnackMessage.error.setDefaultRepositoryAccessMessage;
-}
-
 export default function GitHubConnect() {
-  const githubConnectState = useAppSelector((state) => state.githubConnect);
   const userInfo = useAppSelector((state) => state.user.userInfo);
   const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
-  const dispatch = useAppDispatch();
-  const { refreshAccessToken, getIDToken, getDecodedIDToken, getBasicUserInfo } = useAuthContext();
+  const navigate = useNavigate();
 
   const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(() =>
     consumeStoredGitHubConnectResult(),
@@ -66,110 +44,70 @@ export default function GitHubConnect() {
     startGitHubOAuth(DEFAULT_GITHUB_OAUTH_RETURN_PATH);
   };
 
-  const handleGrantDefaultAccess = () => {
-    void dispatch(setDefaultRepositoryAccess());
-  };
-
-  // Runs once on mount — reads directly from window.location to avoid React Router reactivity issues.
   useEffect(() => {
-    const handleCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const urlState = params.get("state");
-
-      if (!code || !urlState) return;
-
-      // Parse stored state
-      const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
-      let storedObj: GitHubOAuthStoredState | null = null;
-      try {
-        if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
-      } catch {
-        // invalid JSON — treat as missing
-      }
-
-      // Fall back to the access-requests page if the return path was never recorded.
-      const returnPath = storedObj?.returnPath || DEFAULT_GITHUB_OAUTH_RETURN_PATH;
-
-      // Validate expiry
+    const code =
+      sessionStorage.getItem("gh_pending_oauth_code") ||
+      new URLSearchParams(window.location.search).get("code");
+    const urlState =
+      sessionStorage.getItem("gh_oauth_callback_state") ||
+      new URLSearchParams(window.location.search).get("state");
+  
+    // Already handled / nothing to do — still send user home if code is pending
+    if (!code) return;
+  
+    const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
+    let storedObj: GitHubOAuthStoredState | null = null;
+    try {
+      if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
+    } catch {
+      // ignore
+    }
+  
+    const returnPath = storedObj?.returnPath || "/"; // prefer home for this flow
+  
+    // Validate only when we still have the callback state (first run)
+    if (urlState) {
       if (!storedObj || Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
         sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        navigateWithGitHubConnectResult(returnPath, {
-          status: "error",
-          errorMessage: "Session expired: the connection request took too long. Please try again.",
-        });
+        sessionStorage.removeItem("gh_pending_oauth_code");
+        sessionStorage.removeItem("gh_oauth_callback_state");
+        navigateWithGitHubConnectResult(
+          returnPath,
+          {
+            status: "error",
+            errorMessage: "Session expired: the connection request took too long. Please try again.",
+          },
+          navigate,
+        );
         return;
       }
-
-      // Validate CSRF
+  
       if (urlState !== storedObj.state) {
         sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        navigateWithGitHubConnectResult(returnPath, {
-          status: "error",
-          errorMessage:
-            "Security validation failed: authentication state mismatch. Please try again.",
-        });
+        sessionStorage.removeItem("gh_pending_oauth_code");
+        sessionStorage.removeItem("gh_oauth_callback_state");
+        navigateWithGitHubConnectResult(
+          returnPath,
+          {
+            status: "error",
+            errorMessage:
+              "Security validation failed: authentication state mismatch. Please try again.",
+          },
+          navigate,
+        );
         return;
       }
+    }
+  
+    stashPendingOAuthCode(code);
+    sessionStorage.removeItem("gh_oauth_callback_state");
+    navigate(returnPath, { replace: true });
+  }, [navigate]);
 
-      // Nonce consumed — remove before dispatching
-      sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-
-      // Await the thunk so we read the settled result, not stale Redux state
-      const result = await dispatch(connectGitHub({ code }));
-
-      if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
-        // SCIM now has githubUserId; force-refresh so the JWT claim is present before grant.
-        await refreshAccessToken();
-        const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
-          getIDToken(),
-          getDecodedIDToken(),
-          getBasicUserInfo(),
-        ]);
-        APIService.updateIdToken(idToken);
-        dispatch(
-          setUserAuthData({
-            userInfo: basicUserInfo,
-            decodedIdToken,
-          }),
-        );
-
-        const grantResult = await dispatch(setDefaultRepositoryAccess());
-        const accessGranted = setDefaultRepositoryAccess.fulfilled.match(grantResult);
-        navigateWithGitHubConnectResult(returnPath, {
-          status: "verified",
-          githubUserId: result.payload.githubUserId,
-          githubUsername: result.payload.githubUsername,
-          defaultAccessGranted: accessGranted,
-          ...(accessGranted
-            ? {}
-            : { defaultAccessError: extractDefaultAccessError(grantResult.payload) }),
-        });
-      } else if (connectGitHub.fulfilled.match(result)) {
-        navigateWithGitHubConnectResult(returnPath, {
-          status: "unverified",
-          errorMessage: SnackMessage.error.githubUnverifiedMessage,
-        });
-      } else {
-        navigateWithGitHubConnectResult(returnPath, {
-          status: "error",
-          errorMessage: SnackMessage.error.githubConnectMessage,
-        });
-      }
-    };
-
-    void handleCallback();
-  }, [dispatch]);
-
-  const { isConnected, githubUsername } = resolveGitHubConnectionStatus(storedResult, {
+  const { isConnected } = resolveGitHubConnectionStatus(storedResult, {
     jwtGithubUserId,
     githubUsername: userInfo?.githubUsername,
   });
-
-  // Full-page spinner only for OAuth connect loading — keep connected UI for default-access grants.
-  if (githubConnectState.state !== State.idle && !storedResult) {
-    return <CircularProgress />;
-  }
 
   if (storedResult && storedResult.status !== "verified") {
     return (
@@ -179,61 +117,4 @@ export default function GitHubConnect() {
       </Box>
     );
   }
-
-  if (isConnected) {
-    const accessGranted =
-      githubConnectState.defaultAccessState === State.success ||
-      storedResult?.defaultAccessGranted === true;
-    const defaultAccessError =
-      githubConnectState.defaultAccessState === State.failed
-        ? SnackMessage.error.setDefaultRepositoryAccessMessage
-        : storedResult?.defaultAccessError;
-
-    return (
-      <Box>
-        <Typography color="success.main">
-          Connected{githubUsername ? ` as @${githubUsername}` : ""}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          {accessGranted
-            ? "Default repository read access has been requested for your employment type."
-            : "Grant default read access to the repositories for your employment type."}
-        </Typography>
-        {defaultAccessError && (
-          <Typography color="error.main" variant="body2" sx={{ mt: 1 }}>
-            {defaultAccessError}
-          </Typography>
-        )}
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleGrantDefaultAccess}
-          disabled={githubConnectState.defaultAccessState === State.loading}
-          sx={{ mt: 1 }}
-        >
-          {githubConnectState.defaultAccessState === State.loading
-            ? "Granting access..."
-            : accessGranted
-              ? "Re-grant default repository access"
-              : "Grant default repository access"}
-        </Button>
-      </Box>
-    );
-  }
-
-  return (
-    <Box>
-      <Typography variant="body2">
-        Before connecting, ensure your company email is added and verified on your GitHub account.
-      </Typography>
-      <Button
-        variant="contained"
-        color="success"
-        onClick={handleRedirect}
-        sx={{ mt: 1 }}
-      >
-        Connect with GitHub
-      </Button>
-    </Box>
-  );
 }

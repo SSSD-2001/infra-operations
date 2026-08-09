@@ -14,10 +14,21 @@
 // specific language governing permissions and limitations
 // under the License.
 import { GithubOAuthConfig } from "@config/config";
-import { GITHUB_OAUTH_STATE_KEY, RESULT_KEY } from "@config/constant";
+import type { NavigateFunction } from "react-router-dom";
+
+import { GITHUB_OAUTH_STATE_KEY, RESULT_KEY, PENDING_OAUTH_CODE_KEY } from "@config/constant";
+
+export const stashPendingOAuthCode = (code: string): void => {
+  sessionStorage.setItem(PENDING_OAUTH_CODE_KEY, code);
+};
+
+export const consumePendingOAuthCode = (): string | null => {
+  const code = sessionStorage.getItem(PENDING_OAUTH_CODE_KEY);
+  if (code) sessionStorage.removeItem(PENDING_OAUTH_CODE_KEY);
+  return code;
+};
 
 export const DEFAULT_GITHUB_OAUTH_RETURN_PATH = "/github/repository-access-requests";
-
 export interface GitHubOAuthStoredState {
   state: string;
   createdAt: number;
@@ -34,6 +45,15 @@ export interface GitHubConnectResult {
   /** Persisted failure reason when automatic default-access grant fails after verify. */
   defaultAccessError?: string;
 }
+
+export const navigateWithGitHubConnectResult = (
+  returnPath: string,
+  result: GitHubConnectResult,
+  navigate: NavigateFunction,
+): void => {
+  sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
+  navigate(returnPath, { replace: true });
+};
 
 export interface GitHubConnectionStatus {
   isConnected: boolean;
@@ -73,12 +93,6 @@ export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETUR
     prompt: "select_account",
   });
   window.location.href = `${GithubOAuthConfig.oauthAuthorizationBaseUrl}?${params.toString()}`;
-};
-
-// Stores the connect outcome and navigates back to the page that initiated the OAuth flow.
-export const navigateWithGitHubConnectResult = (returnPath: string, result: GitHubConnectResult): void => {
-  sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
-  window.location.href = returnPath;
 };
 
 // Reads and clears the connect result left behind by navigateWithGitHubConnectResult, if any.
