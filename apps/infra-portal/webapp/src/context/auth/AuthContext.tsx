@@ -113,20 +113,23 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        setAppState(AppState.Loading);
-
+        if (appState === AppState.Authenticated) {
+          return;
+        }
+    
         if (state.isLoading) return;
-
+    
         if (state.isAuthenticated) {
           setAppState(AppState.Authenticating);
           await setupAuthenticatedUser();
-
           if (mounted) setAppState(AppState.Authenticated);
         } else {
           const silentSignInSuccess = await trySignInSilently();
-
-          if (mounted)
-            setAppState(silentSignInSuccess ? AppState.Authenticating : AppState.Unauthenticated);
+          if (mounted) {
+            setAppState(
+              silentSignInSuccess ? AppState.Authenticating : AppState.Unauthenticated,
+            );
+          }
         }
       } catch {
         if (mounted) {

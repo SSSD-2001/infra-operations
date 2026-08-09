@@ -52,7 +52,7 @@ const AppHandler = () => {
 
   useEffect(() => {
     if (auth.status === "loading") {
-      setAppState("loading");
+      setAppState((prev) => (prev === "success" ? "success" : "loading"));
     } else if (auth.status === "success") {
       setAppState("success");
     } else if (auth.status === "failed") {
