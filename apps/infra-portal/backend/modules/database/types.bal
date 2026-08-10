@@ -317,3 +317,25 @@ public type Team record {
     # The slug of the team to add to the repository
     string permission;
 };
+
+# Record for user default repository access tracking.
+public type UserDefaultRepositoryAccess record {|
+    # HR employee id
+    @sql:Column {name: "employee_id"}
+    string employeeId;
+    # Whether default access was granted
+    boolean granted;
+|};
+
+# Row from organizations_default_repositories.
+public type OrganizationDefaultRepository record {|
+    # GitHub organization login
+    @sql:Column {name: "org_name"}
+    string orgName;
+    # Team slug in the organization
+    @sql:Column {name: "team_slug"}
+    string teamSlug;
+    # Access category: PERMANENT, CS, or INTERN
+    @sql:Column {name: "access_type"}
+    string accessType;
+|};

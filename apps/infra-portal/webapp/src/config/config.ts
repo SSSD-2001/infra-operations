@@ -84,6 +84,7 @@ export const AppConfig = {
 
     githubVerifyEmail: ServiceBaseUrl + "/github/verify-and-persist-user",
     setDefaultRepositoryAccess: ServiceBaseUrl + "/set-default-repository-access",
+    defaultRepositoryAccess: ServiceBaseUrl + "/default-repository-access",
 
     securityDashboardLinks: ServiceBaseUrl + "/security-dashboard-links",
   },
