@@ -52,20 +52,16 @@ export default function GitHubConnect() {
       sessionStorage.getItem("gh_oauth_callback_state") ||
       new URLSearchParams(window.location.search).get("state");
   
-    // Already handled / nothing to do — still send user home if code is pending
     if (!code) return;
   
     const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
     let storedObj: GitHubOAuthStoredState | null = null;
     try {
       if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
-    } catch {
-      // ignore
-    }
+    } catch {}
   
-    const returnPath = storedObj?.returnPath || "/"; // prefer home for this flow
+    const returnPath = storedObj?.returnPath || "/"; 
   
-    // Validate only when we still have the callback state (first run)
     if (urlState) {
       if (!storedObj || Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
         sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);

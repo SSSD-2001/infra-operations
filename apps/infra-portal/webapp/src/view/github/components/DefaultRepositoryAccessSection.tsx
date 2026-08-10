@@ -48,7 +48,6 @@ export default function DefaultRepositoryAccessSection() {
     void dispatch(fetchDefaultRepositoryAccess());
   }, [isConnected, dispatch]);
 
-  // Poll only while DB says not granted
   useEffect(() => {
     if (!isConnected || granted !== false) return;
     if (fetchState === State.loading) return;
@@ -82,7 +81,6 @@ export default function DefaultRepositoryAccessSection() {
     );
   }
 
-  // Chip ONLY when table says granted = false (connect done, grant pending/failed)
   if (granted === false) {
     return (
       <Box sx={{ mb: 3 }}>
