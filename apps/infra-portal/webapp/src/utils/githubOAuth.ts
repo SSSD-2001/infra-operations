@@ -77,7 +77,6 @@ export const resolveGitHubConnectionStatus = (
   return { isConnected, githubUsername: githubUsername ?? undefined };
 };
 
-// Kicks off the GitHub authorize redirect, remembering where the callback should send the user back to.
 export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETURN_PATH): void => {
   const state = self.crypto.randomUUID();
   const stateObj: GitHubOAuthStoredState = { state, createdAt: Date.now(), returnPath };
@@ -88,14 +87,11 @@ export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETUR
     scope: (GithubOAuthConfig.scope || []).join(" "),
     state,
     redirect_uri: GithubOAuthConfig.githubAuthRedirectUrl,
-    // Forces GitHub's account picker so a shared/local browser can't silently reuse whichever
-    // GitHub session happens to be active, which would connect the wrong GitHub account.
-    prompt: "select_account",
+        prompt: "select_account",
   });
   window.location.href = `${GithubOAuthConfig.oauthAuthorizationBaseUrl}?${params.toString()}`;
 };
 
-// Reads and clears the connect result left behind by navigateWithGitHubConnectResult, if any.
 export const consumeStoredGitHubConnectResult = (): GitHubConnectResult | null => {
   const raw = sessionStorage.getItem(RESULT_KEY);
   if (!raw) return null;

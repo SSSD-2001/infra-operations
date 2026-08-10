@@ -82,7 +82,6 @@ export default function Greeting({ user, roles }: GreetingProps) {
   const accent = theme.palette.primary.main;
   const accentBg = alpha(accent, 0.1);
 
-  // Picked up once when returning from the GitHub OAuth redirect, before the next /user-info fetch settles.
   const { refreshAccessToken, getIDToken, getDecodedIDToken, getBasicUserInfo } = useAuthContext();
 
   const [connectResult] = useState<GitHubConnectResult | null>(() =>
@@ -107,7 +106,6 @@ export default function Greeting({ user, roles }: GreetingProps) {
           try {
             await refreshAccessToken();
           } catch {
-            // Session still valid for UI; grant may fail if JWT lacks githubUserId
           }
           const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
             getIDToken(),
