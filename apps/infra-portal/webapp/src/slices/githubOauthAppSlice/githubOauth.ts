@@ -37,18 +37,39 @@ export interface SetDefaultRepositoryAccessResponse {
   failedMemberships: unknown[];
 }
 
-interface GitHubConnectState {
+export interface GitHubConnectState {
   state: State;
   githubUserId?: string;
   githubUsername?: string;
   defaultAccessState: State;
+  defaultAccessFetchState: State;
+  defaultAccessGranted?: boolean;
+  defaultAccessOrganizations: DefaultAccessOrganization[];
   errorMessage?: string | null;
 }
 
 const initialState: GitHubConnectState = {
   state: State.idle,
   defaultAccessState: State.idle,
+  defaultAccessFetchState: State.idle,
+  defaultAccessOrganizations: [],
 };
+
+export interface DefaultAccessRepository {
+  name: string;
+  htmlUrl: string;
+}
+
+export interface DefaultAccessOrganization {
+  orgName: string;
+  avatarUrl: string;
+  repositories: DefaultAccessRepository[];
+}
+
+export interface DefaultRepositoryAccessResponse {
+  granted: boolean;
+  organizations: DefaultAccessOrganization[];
+}
 
 export const connectGitHub = createAsyncThunk(
   "auth/connectGitHub",
@@ -130,12 +151,43 @@ export const setDefaultRepositoryAccess = createAsyncThunk(
   },
 );
 
+export const fetchDefaultRepositoryAccess = createAsyncThunk(
+  "auth/fetchDefaultRepositoryAccess",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await APIService.getInstance().get(
+        AppConfig.serviceUrls.defaultRepositoryAccess,
+      );
+      return response.data as DefaultRepositoryAccessResponse;
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        return rejectWithValue("Request canceled");
+      }
+      if (axios.isAxiosError(error)) {
+        return rejectWithValue(error.response?.data || "Failed to fetch default repository access");
+      }
+      return rejectWithValue("An unexpected error occurred");
+    }
+  },
+);
+
 const githubConnectSlice = createSlice({
   name: "githubConnect",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
     builder
+      .addCase(fetchDefaultRepositoryAccess.pending, (state) => {
+        state.defaultAccessFetchState = State.loading;
+      })
+      .addCase(fetchDefaultRepositoryAccess.fulfilled, (state, action) => {
+        state.defaultAccessFetchState = State.success;
+        state.defaultAccessGranted = action.payload.granted;
+        state.defaultAccessOrganizations = action.payload.organizations;
+      })
+      .addCase(fetchDefaultRepositoryAccess.rejected, (state) => {
+        state.defaultAccessFetchState = State.failed;
+      })
       .addCase(connectGitHub.pending, (state) => {
         state.state = State.loading;
         state.errorMessage = null;
@@ -162,6 +214,7 @@ const githubConnectSlice = createSlice({
       })
       .addCase(setDefaultRepositoryAccess.fulfilled, (state) => {
         state.defaultAccessState = State.success;
+        state.defaultAccessGranted = true;
       })
       .addCase(setDefaultRepositoryAccess.rejected, (state) => {
         state.defaultAccessState = State.failed;

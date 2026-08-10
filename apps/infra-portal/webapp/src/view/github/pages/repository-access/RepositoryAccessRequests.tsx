@@ -13,20 +13,47 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, useTheme } from "@mui/material";
 import GitHubConnect from "@component/ui/GitHubConnect";
+import DefaultRepositoryAccessSection from "../../components/DefaultRepositoryAccessSection";
 
 export default function RepositoryAccessRequests() {
+  const theme = useTheme();
   return (
-    <Box sx={{ mt: 3, p: 3, border: "1px solid #ddd", borderRadius: "8px" }}>
-      <Typography variant="h6" gutterBottom>
-        Repository Access
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Connect your GitHub account with your verified work email, then grant default read access
-        based on your employment type (permanent team readonly teams, or intern teams).
-      </Typography>
-      <GitHubConnect />
+    <Box sx={{ mt: 3 }}>
+      <Box
+        sx={{
+          background:
+            theme.palette.mode === "dark"
+              ? theme.palette.surface.primary.active
+              : theme.palette.neutral["white"],
+          border: `1px solid ${theme.palette.divider}`,
+          borderRadius: "16px",
+          p: { xs: 2, sm: 3 },
+        }}
+      >
+        <Typography
+          variant="h6"
+          sx={{
+            fontWeight: 600,
+            mb: 0.5,
+            color: theme.palette.customText.primary.p1.active,
+          }}
+        >
+          Default Repository Access
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            mb: 3,
+            color: theme.palette.customText.primary.p3.active,
+          }}
+        >
+          Organizations and repositories you grant access by default.
+        </Typography>
+        <DefaultRepositoryAccessSection />
+        <GitHubConnect />
+      </Box>
     </Box>
   );
 }

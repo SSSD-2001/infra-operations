@@ -394,3 +394,39 @@ isolated function batchExecuteAddOrganizationDefaultTeams(int organizationId, in
         select addOrganizationDefaultTeamQuery(organizationId, teamId);
     return databaseClient->batchExecute(batch);
 }
+
+# Insert or update user default repository access.
+#
+# + employeeId - HR employee id
+# + granted - Whether default access was granted
+# + return - Error if the DB write fails
+public isolated function upsertUserDefaultRepositoryAccess(string employeeId, boolean granted)
+    returns error? {
+    _ = check databaseClient->execute(upsertUserDefaultRepositoryAccessQuery(employeeId, granted));
+}
+
+# Get user default repository access by employee id.
+#
+# + employeeId - HR employee id
+# + return - Access row, () if missing, or error
+public isolated function getUserDefaultRepositoryAccess(string employeeId)
+    returns UserDefaultRepositoryAccess|error? {
+    UserDefaultRepositoryAccess|error row =
+        databaseClient->queryRow(getUserDefaultRepositoryAccessQuery(employeeId));
+    if row is sql:NoRowsError {
+        return ();
+    }
+    return row;
+}
+
+# Get default org/team mappings for an access type.
+#
+# + accessType - PERMANENT, CS, or INTERN
+# + return - Rows or error
+public isolated function getOrganizationDefaultRepositoriesByAccessType(string accessType)
+    returns OrganizationDefaultRepository[]|error {
+    stream<OrganizationDefaultRepository, error?> resultStream =
+        databaseClient->query(getOrganizationDefaultRepositoriesByAccessTypeQuery(accessType));
+    return from OrganizationDefaultRepository row in resultStream
+        select row;
+}

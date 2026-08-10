@@ -381,6 +381,16 @@ public type OrganizationAndTeam record {
     string teamSlug;
 };
 
+# Minimal repository returned by team repos listing.
+public type TeamRepository record {|
+    # Repository name
+    string name;
+    # HTML URL
+    @jsondata:Name {value: "html_url"}
+    string htmlUrl;
+    json...;
+|};
+
 # Team membership response for users.
 public type MembershipResponse record {|
     # The state of the membership.

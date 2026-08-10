@@ -517,3 +517,39 @@ public isolated function getUserDetails(string githubUserId) returns GitHubUser|
     }
     return githubClient->/github/user.get(accountId = githubUserId);
 }
+
+# List repositories for a team (paginated, capped).
+#
+# + orgName - Organization login
+# + teamSlug - Team slug
+# + maxRepos - Soft cap to avoid huge payloads (e.g. 200)
+# + return - Repositories or error
+public isolated function getTeamRepositories(string orgName, string teamSlug, int maxRepos = 200)
+    returns TeamRepository[]|error {
+    http:Client githubClient = check createGithubClient();
+    TeamRepository[] allRepos = [];
+    int page = 1;
+    int perPage = 100;
+
+    while allRepos.length() < maxRepos {
+        TeamRepository[]|error pageRepos =
+            githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(perPage = perPage, page = page);
+        if pageRepos is error {
+            return pageRepos;
+        }
+        if pageRepos.length() == 0 {
+            break;
+        }
+        foreach TeamRepository repo in pageRepos {
+            allRepos.push(repo);
+            if allRepos.length() >= maxRepos {
+                break;
+            }
+        }
+        if pageRepos.length() < perPage {
+            break;
+        }
+        page += 1;
+    }
+    return allRepos;
+}
