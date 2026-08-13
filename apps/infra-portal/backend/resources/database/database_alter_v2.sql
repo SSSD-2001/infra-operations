@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS organizations_default_repositories (
 );
 
 CREATE TABLE IF NOT EXISTS user_default_repository_access (
+    id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     employee_id VARCHAR(255) NOT NULL UNIQUE,
-    granted BOOLEAN NOT NULL DEFAULT FALSE
+    status ENUM('not_granted', 'granting', 'granted') NOT NULL DEFAULT 'not_granted'
 );

@@ -43,7 +43,7 @@ export interface GitHubConnectState {
   githubUsername?: string;
   defaultAccessState: State;
   defaultAccessFetchState: State;
-  defaultAccessGranted?: boolean;
+  defaultAccessStatus?: "not_granted" | "granting" | "granted";
   defaultAccessOrganizations: DefaultAccessOrganization[];
   errorMessage?: string | null;
 }
@@ -67,7 +67,7 @@ export interface DefaultAccessOrganization {
 }
 
 export interface DefaultRepositoryAccessResponse {
-  granted: boolean;
+  status: "not_granted" | "granting" | "granted";
   organizations: DefaultAccessOrganization[];
 }
 
@@ -182,7 +182,7 @@ const githubConnectSlice = createSlice({
       })
       .addCase(fetchDefaultRepositoryAccess.fulfilled, (state, action) => {
         state.defaultAccessFetchState = State.success;
-        state.defaultAccessGranted = action.payload.granted;
+        state.defaultAccessStatus = action.payload.status;
         state.defaultAccessOrganizations = action.payload.organizations;
       })
       .addCase(fetchDefaultRepositoryAccess.rejected, (state) => {
@@ -211,13 +211,15 @@ const githubConnectSlice = createSlice({
       })
       .addCase(setDefaultRepositoryAccess.pending, (state) => {
         state.defaultAccessState = State.loading;
+        state.defaultAccessStatus = "granting";
       })
       .addCase(setDefaultRepositoryAccess.fulfilled, (state) => {
         state.defaultAccessState = State.success;
-        state.defaultAccessGranted = true;
+        state.defaultAccessStatus = "granted";
       })
       .addCase(setDefaultRepositoryAccess.rejected, (state) => {
         state.defaultAccessState = State.failed;
+        state.defaultAccessStatus = "not_granted";
       });
   },
 });

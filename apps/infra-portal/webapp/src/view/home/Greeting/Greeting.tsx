@@ -89,7 +89,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
   );
   const pendingCode = useMemo(() => consumePendingOAuthCode(), []);
   const [isPostConnectLoading, setIsPostConnectLoading] = useState(
-    () => Boolean(pendingCode) || connectResult?.status === "verified",
+    () => Boolean(pendingCode),
   );
   const [localUsername, setLocalUsername] = useState<string | undefined>();
 
@@ -105,8 +105,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
         if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
           try {
             await refreshAccessToken();
-          } catch {
-          }
+          } catch {}
           const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
             getIDToken(),
             getDecodedIDToken(),
@@ -114,17 +113,15 @@ export default function Greeting({ user, roles }: GreetingProps) {
           ]);
           APIService.updateIdToken(idToken);
           dispatch(setUserAuthData({ userInfo: basicUserInfo, decodedIdToken }));
-
-          const grantResult = await dispatch(setDefaultRepositoryAccess());
-          const accessGranted = setDefaultRepositoryAccess.fulfilled.match(grantResult);
-
+        
           if (result.payload.githubUsername) {
             setLocalUsername(result.payload.githubUsername);
           }
-
           await dispatch(getUserInfo());
-
-          if (accessGranted) {
+          setIsPostConnectLoading(false);
+        
+          const grantResult = await dispatch(setDefaultRepositoryAccess());
+          if (setDefaultRepositoryAccess.fulfilled.match(grantResult)) {
             await dispatch(fetchDefaultRepositoryAccess());
           } else {
             dispatch(
@@ -162,14 +159,6 @@ export default function Greeting({ user, roles }: GreetingProps) {
     if (connectResult.status === "verified") {
       setIsPostConnectLoading(true);
       void dispatch(getUserInfo()).finally(() => setIsPostConnectLoading(false));
-      if (connectResult.defaultAccessGranted === false && connectResult.defaultAccessError) {
-        dispatch(
-          enqueueSnackbarMessage({
-            message: connectResult.defaultAccessError,
-            type: "error",
-          }),
-        );
-      }
     } else {
       dispatch(
         enqueueSnackbarMessage({

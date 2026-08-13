@@ -766,21 +766,14 @@ isolated function deleteDefaultTeamQuery(int teamId) returns sql:ParameterizedQu
 # Upsert user default repository access by employee id.
 #
 # + employeeId - HR employee id
-# + granted - Whether default access was granted
+# + status - Status of the default access (not_granted, granting, granted)
 # + return - Parameterized upsert query
-isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, boolean granted)
+isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, string status)
     returns sql:ParameterizedQuery => `
-    INSERT INTO user_default_repository_access (
-        employee_id,
-        granted
-    )
-    VALUES (
-        ${employeeId},
-        ${granted}
-    )
-    ON DUPLICATE KEY UPDATE
-        granted = VALUES(granted)
-    `;
+    INSERT INTO user_default_repository_access (employee_id, status)
+    VALUES (${employeeId}, ${status})
+    ON DUPLICATE KEY UPDATE status = VALUES(status)
+`;
 
 # Get user default repository access by employee id.
 #
@@ -788,9 +781,7 @@ isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, bool
 # + return - Parameterized select query
 isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
     returns sql:ParameterizedQuery => `
-    SELECT
-        employee_id,
-        granted
+    SELECT id, employee_id, status
     FROM user_default_repository_access
     WHERE employee_id = ${employeeId}
 `;
