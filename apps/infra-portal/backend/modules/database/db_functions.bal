@@ -398,11 +398,11 @@ isolated function batchExecuteAddOrganizationDefaultTeams(int organizationId, in
 # Insert or update user default repository access.
 #
 # + employeeId - HR employee id
-# + granted - Whether default access was granted
+# + status - Status of the default access (not_granted, granting, granted)
 # + return - Error if the DB write fails
-public isolated function upsertUserDefaultRepositoryAccess(string employeeId, boolean granted)
+public isolated function upsertUserDefaultRepositoryAccess(string employeeId, string status)
     returns error? {
-    _ = check databaseClient->execute(upsertUserDefaultRepositoryAccessQuery(employeeId, granted));
+    _ = check databaseClient->execute(upsertUserDefaultRepositoryAccessQuery(employeeId, status));
 }
 
 # Get user default repository access by employee id.

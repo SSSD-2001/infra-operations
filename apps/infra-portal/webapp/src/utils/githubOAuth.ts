@@ -40,10 +40,6 @@ export interface GitHubConnectResult {
   githubUserId?: string;
   githubUsername?: string;
   errorMessage?: string;
-  /** Set when default repository access was requested during the OAuth callback. */
-  defaultAccessGranted?: boolean;
-  /** Persisted failure reason when automatic default-access grant fails after verify. */
-  defaultAccessError?: string;
 }
 
 export const navigateWithGitHubConnectResult = (

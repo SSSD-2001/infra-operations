@@ -320,11 +320,15 @@ public type Team record {
 
 # Record for user default repository access tracking.
 public type UserDefaultRepositoryAccess record {|
+    # Auto-increment primary key
+    @sql:Column {name: "id"}
+    int id;
     # HR employee id
     @sql:Column {name: "employee_id"}
     string employeeId;
-    # Whether default access was granted
-    boolean granted;
+    # Default access status: not_granted, granting, or granted
+    @sql:Column {name: "status"}
+    string status;
 |};
 
 # Row from organizations_default_repositories.
