@@ -15,7 +15,8 @@
 // under the License.
 import { useAuthContext } from "@asgardeo/auth-react";
 import { GitHub as GitHubIcon } from "@mui/icons-material";
-import { Box, Button, Chip, CircularProgress, Typography, alpha, useTheme } from "@mui/material";import { useEffect, useMemo, useState } from "react";
+import { Box, Button, Chip, CircularProgress, Typography, alpha, useTheme } from "@mui/material";
+import { useEffect, useState } from "react";
 
 import { GITHUB_OAUTH_STATE_KEY, SnackMessage } from "@config/constant";
 import { useConfirmationModalContext } from "@root/src/context";
@@ -84,14 +85,18 @@ export default function Greeting({ user, roles }: GreetingProps) {
 
   const { refreshAccessToken, getIDToken, getDecodedIDToken, getBasicUserInfo } = useAuthContext();
 
-  const [connectResult] = useState<GitHubConnectResult | null>(() =>
-    consumeStoredGitHubConnectResult(),
-  );
-  const pendingCode = useMemo(() => consumePendingOAuthCode(), []);
-  const [isPostConnectLoading, setIsPostConnectLoading] = useState(
-    () => Boolean(pendingCode),
-  );
+  const [connectResult, setConnectResult] = useState<GitHubConnectResult | null>(null);
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+  const [isPostConnectLoading, setIsPostConnectLoading] = useState(false);
   const [localUsername, setLocalUsername] = useState<string | undefined>();
+  const [isVerifiedLocally, setIsVerifiedLocally] = useState(false);
+
+  useEffect(() => {
+    const code = consumePendingOAuthCode();
+    setPendingCode(code);
+    setConnectResult(consumeStoredGitHubConnectResult());
+    if (code) setIsPostConnectLoading(true);
+  }, []);
 
   useEffect(() => {
     if (!pendingCode) return;
@@ -103,9 +108,12 @@ export default function Greeting({ user, roles }: GreetingProps) {
         const result = await dispatch(connectGitHub({ code: pendingCode }));
 
         if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
+          setIsVerifiedLocally(true);
           try {
             await refreshAccessToken();
-          } catch {}
+          } catch (refreshError) {
+            console.error("Failed to refresh the access token after GitHub connect", refreshError);
+          }
           const [idToken, decodedIdToken, basicUserInfo] = await Promise.all([
             getIDToken(),
             getDecodedIDToken(),
@@ -123,13 +131,6 @@ export default function Greeting({ user, roles }: GreetingProps) {
           const grantResult = await dispatch(setDefaultRepositoryAccess());
           if (setDefaultRepositoryAccess.fulfilled.match(grantResult)) {
             await dispatch(fetchDefaultRepositoryAccess());
-          } else {
-            dispatch(
-              enqueueSnackbarMessage({
-                message: SnackMessage.error.setDefaultRepositoryAccessMessage,
-                type: "error",
-              }),
-            );
           }
         } else if (connectGitHub.fulfilled.match(result)) {
           dispatch(
@@ -138,7 +139,10 @@ export default function Greeting({ user, roles }: GreetingProps) {
               type: "error",
             }),
           );
-        } else {
+        } else if (
+          connectGitHub.rejected.match(result) &&
+          result.payload === "An unexpected error occurred"
+        ) {
           dispatch(
             enqueueSnackbarMessage({
               message: SnackMessage.error.githubConnectMessage,
@@ -176,13 +180,14 @@ export default function Greeting({ user, roles }: GreetingProps) {
       ? Role.APPROVER.toLowerCase()
       : Role.EMPLOYEE.toLowerCase();
 
-  const { isConnected: isGithubConnected, githubUsername } = resolveGitHubConnectionStatus(
+  const { isConnected: resolvedConnected, githubUsername } = resolveGitHubConnectionStatus(
     connectResult,
     {
       jwtGithubUserId,
       githubUsername: localUsername ?? user.userInfo?.githubUsername,
     },
   );
+  const isGithubConnected = resolvedConnected || isVerifiedLocally;
 
   const chipSx = {
     display: "inline-flex",

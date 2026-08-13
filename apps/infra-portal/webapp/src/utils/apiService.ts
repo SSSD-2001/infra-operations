@@ -78,7 +78,7 @@ export class APIService {
   }
 
   public static updateIdToken(idToken: string) {
-    APIService._idToken = idToken;
+    APIService.updateTokens(idToken);
   }
 
   private static updateRequestInterceptor() {

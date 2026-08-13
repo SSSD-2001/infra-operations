@@ -37,14 +37,17 @@ export interface SetDefaultRepositoryAccessResponse {
   failedMemberships: unknown[];
 }
 
+export type DefaultAccessStatus = "not_granted" | "granting" | "granted";
+
 export interface GitHubConnectState {
   state: State;
   githubUserId?: string;
   githubUsername?: string;
   defaultAccessState: State;
   defaultAccessFetchState: State;
-  defaultAccessStatus?: "not_granted" | "granting" | "granted";
+  defaultAccessStatus?: DefaultAccessStatus;
   defaultAccessOrganizations: DefaultAccessOrganization[];
+  defaultAccessErrorMessage?: string | null;
   errorMessage?: string | null;
 }
 
@@ -67,7 +70,7 @@ export interface DefaultAccessOrganization {
 }
 
 export interface DefaultRepositoryAccessResponse {
-  status: "not_granted" | "granting" | "granted";
+  status: DefaultAccessStatus;
   organizations: DefaultAccessOrganization[];
 }
 
@@ -76,7 +79,7 @@ export const connectGitHub = createAsyncThunk(
   async ({ code }: GitHubConnectPayload, { dispatch, rejectWithValue }) => {
     try {
       const response = await APIService.getInstance().post(
-        AppConfig.serviceUrls.githubVerifyEmail,
+        AppConfig.serviceUrls.githubVerifyAndPersistUser,
         {
           code,
         },
@@ -184,9 +187,19 @@ const githubConnectSlice = createSlice({
         state.defaultAccessFetchState = State.success;
         state.defaultAccessStatus = action.payload.status;
         state.defaultAccessOrganizations = action.payload.organizations;
+        state.defaultAccessErrorMessage = null;
       })
-      .addCase(fetchDefaultRepositoryAccess.rejected, (state) => {
+      .addCase(fetchDefaultRepositoryAccess.rejected, (state, action) => {
+        // Superseded requests are cancelled by the API service, which is not a real failure.
+        if (action.payload === "Request canceled") {
+          return;
+        }
         state.defaultAccessFetchState = State.failed;
+        state.defaultAccessErrorMessage =
+          typeof action.payload === "string"
+            ? action.payload
+            : ((action.payload as { message?: string } | undefined)?.message ??
+              "Unable to load default repository access.");
       })
       .addCase(connectGitHub.pending, (state) => {
         state.state = State.loading;

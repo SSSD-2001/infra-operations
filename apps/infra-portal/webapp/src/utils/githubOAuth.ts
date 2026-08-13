@@ -28,7 +28,7 @@ export const consumePendingOAuthCode = (): string | null => {
   return code;
 };
 
-export const DEFAULT_GITHUB_OAUTH_RETURN_PATH = "/github/repository-access-requests";
+export const DEFAULT_GITHUB_OAUTH_RETURN_PATH = "/";
 export interface GitHubOAuthStoredState {
   state: string;
   createdAt: number;

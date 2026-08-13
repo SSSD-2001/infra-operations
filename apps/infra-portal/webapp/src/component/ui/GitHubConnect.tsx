@@ -17,27 +17,31 @@ import { Box, Button, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { GITHUB_OAUTH_STATE_KEY, STATE_EXPIRY_MS } from "@config/constant";
-import { useAppSelector } from "@slices/store";
+import {
+  GITHUB_OAUTH_STATE_KEY,
+  OAUTH_CALLBACK_STATE_KEY,
+  PENDING_OAUTH_CODE_KEY,
+  STATE_EXPIRY_MS,
+} from "@config/constant";
 import {
   DEFAULT_GITHUB_OAUTH_RETURN_PATH,
   GitHubConnectResult,
   GitHubOAuthStoredState,
   consumeStoredGitHubConnectResult,
   navigateWithGitHubConnectResult,
-  resolveGitHubConnectionStatus,
   startGitHubOAuth,
   stashPendingOAuthCode,
 } from "@utils/githubOAuth";
 
 export default function GitHubConnect() {
-  const userInfo = useAppSelector((state) => state.user.userInfo);
-  const jwtGithubUserId = useAppSelector((state) => state.auth.decodedIdToken?.githubUserId);
   const navigate = useNavigate();
 
-  const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(() =>
-    consumeStoredGitHubConnectResult(),
-  );
+  const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(null);
+
+  // The read clears session storage, so it must run after render rather than during it.
+  useEffect(() => {
+    setStoredResult(consumeStoredGitHubConnectResult());
+  }, []);
 
   const handleRedirect = () => {
     setStoredResult(null);
@@ -45,65 +49,74 @@ export default function GitHubConnect() {
   };
 
   useEffect(() => {
-    const code =
-      sessionStorage.getItem("gh_pending_oauth_code") ||
-      new URLSearchParams(window.location.search).get("code");
-    const urlState =
-      sessionStorage.getItem("gh_oauth_callback_state") ||
-      new URLSearchParams(window.location.search).get("state");
-  
+    const clearCallbackStorage = () => {
+      sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
+      sessionStorage.removeItem(PENDING_OAUTH_CODE_KEY);
+      sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const code = sessionStorage.getItem(PENDING_OAUTH_CODE_KEY) || params.get("code");
+    const urlState = sessionStorage.getItem(OAUTH_CALLBACK_STATE_KEY) || params.get("state");
+
     if (!code) return;
-  
+
     const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
     let storedObj: GitHubOAuthStoredState | null = null;
     try {
       if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
-    } catch {}
-  
-    const returnPath = storedObj?.returnPath || "/"; 
-  
-    if (urlState) {
-      if (!storedObj || Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
-        sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        sessionStorage.removeItem("gh_pending_oauth_code");
-        sessionStorage.removeItem("gh_oauth_callback_state");
-        navigateWithGitHubConnectResult(
-          returnPath,
-          {
-            status: "error",
-            errorMessage: "Session expired: the connection request took too long. Please try again.",
-          },
-          navigate,
-        );
-        return;
-      }
-  
-      if (urlState !== storedObj.state) {
-        sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        sessionStorage.removeItem("gh_pending_oauth_code");
-        sessionStorage.removeItem("gh_oauth_callback_state");
-        navigateWithGitHubConnectResult(
-          returnPath,
-          {
-            status: "error",
-            errorMessage:
-              "Security validation failed: authentication state mismatch. Please try again.",
-          },
-          navigate,
-        );
-        return;
-      }
+    } catch {
+      storedObj = null;
     }
-  
+
+    const returnPath = storedObj?.returnPath || "/";
+
+    // A code without a matching state cannot be trusted, so never exchange it.
+    if (!urlState || !storedObj) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
+          status: "error",
+          errorMessage:
+            "Security validation failed: authentication state missing. Please try again.",
+        },
+        navigate,
+      );
+      return;
+    }
+
+    if (Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
+          status: "error",
+          errorMessage: "Session expired: the connection request took too long. Please try again.",
+        },
+        navigate,
+      );
+      return;
+    }
+
+    if (urlState !== storedObj.state) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
+          status: "error",
+          errorMessage:
+            "Security validation failed: authentication state mismatch. Please try again.",
+        },
+        navigate,
+      );
+      return;
+    }
+
     stashPendingOAuthCode(code);
-    sessionStorage.removeItem("gh_oauth_callback_state");
+    sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
     navigate(returnPath, { replace: true });
   }, [navigate]);
-
-  const { isConnected } = resolveGitHubConnectionStatus(storedResult, {
-    jwtGithubUserId,
-    githubUsername: userInfo?.githubUsername,
-  });
 
   if (storedResult && storedResult.status !== "verified") {
     return (
@@ -113,4 +126,6 @@ export default function GitHubConnect() {
       </Box>
     );
   }
+
+  return null;
 }

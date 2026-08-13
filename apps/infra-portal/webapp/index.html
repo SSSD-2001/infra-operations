@@ -47,12 +47,13 @@ under the License.
           var raw = sessionStorage.getItem("gh_oauth_state");
           if (raw) {
             var obj = JSON.parse(raw);
-            if (obj && obj.returnPath) returnPath = obj.returnPath;
+            var candidate = obj && obj.returnPath;
+            if (typeof candidate === "string" && /^\/(?!\/)/.test(candidate)) {
+              returnPath = candidate;
+            }
           }
         } catch (e) {}
-    
-        // Leave callback before React mounts — go straight home
-        window.location.replace(returnPath);
+            window.location.replace(returnPath);
       })();
     </script>
     <script src="/config.js"></script>
