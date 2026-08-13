@@ -2,29 +2,39 @@
 
 ### Default repository access
 
-After a user verifies their GitHub account, `PUT /set-default-repository-access` grants default org/team memberships based on HR employment type. The org/team lists are Ballerina configurables in the `github` module (see `modules/github/gh_function.bal`).
+After a user verifies their GitHub account, `PUT /set-default-repository-access` grants default
+org/team memberships based on HR employment type, and `GET /default-repository-access` reports the
+resulting status and repository list.
 
-Built-in defaults are production org/team slugs:
+The org/team mappings are read at runtime from the `organizations_default_repositories` table via
+`db:getOrganizationDefaultRepositoriesByAccessType(...)`, which is the single source of truth:
 
-| Configurable | Who it applies to | Default |
-| --- | --- | --- |
-| `permanentDefaultTeamAccess` | Permanent employees | `wso2-support` → `wso2-support-readonly`, `wso2` → `wso2-readonly`, `wso2-extensions` → `wso2-readonly` |
-| `csTeamAccess` | Permanent employees in Customer Success (in addition to permanent defaults) | `wso2-cs` → `cs-team`, `wso2-enterprise` → `customer-success-team` |
-| `internsDefaultTeamAccess` | Interns | `wso2` / `wso2-extensions` / `wso2-support` / `ballerina-platform` → `wso2-all-interns` |
+| `access_type` | Who it applies to |
+| --- | --- |
+| `PERMANENT` | Permanent employees |
+| `CS` | Permanent employees in Customer Success (granted **in addition to** `PERMANENT`) |
+| `INTERN` | Interns |
 
-#### Override for local/test
+Per-user progress is tracked in `user_default_repository_access.status`, which is one of
+`not_granted`, `granting` or `granted`. A grant is only recorded as `granted` when every team
+membership succeeds, so partial failures remain retryable.
 
-Override these under `[infra_portal.github]` in `Config.toml` (same section as other GitHub module settings). Example for local/test orgs:
+#### Local and test environments
 
-```toml
-[infra_portal.github]
-permanentDefaultTeamAccess = [
-    {orgName = "your-test-org", teamSlug = "your-readonly-team"}
-]
-csTeamAccess = [
-    {orgName = "your-cs-test-org", teamSlug = "your-cs-team"}
-]
-internsDefaultTeamAccess = [
-    {orgName = "your-test-org", teamSlug = "your-interns-team"}
-]
+`resources/database/database.sql` seeds the **production** org/team values. A local or test
+database should replace those rows with orgs your GitHub token can actually reach, otherwise every
+membership call fails:
+
+```sql
+DELETE FROM organizations_default_repositories;
+
+INSERT INTO organizations_default_repositories (org_name, team_slug, access_type)
+VALUES
+  ("your-test-org", "your-readonly-team", "PERMANENT"),
+  ("your-cs-test-org", "your-cs-team", "CS"),
+  ("your-test-org", "your-interns-team", "INTERN");
 ```
+
+The token used for these calls comes from the entity service `gitHubAccessTokens` configuration,
+which must include every organization listed in the table. Granting a membership also requires the
+token to have owner or team-maintainer rights in that organization; otherwise GitHub returns 403.

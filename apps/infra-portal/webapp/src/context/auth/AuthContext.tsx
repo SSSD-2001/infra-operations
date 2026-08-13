@@ -18,6 +18,7 @@ import { useIdleTimer } from "react-idle-timer";
 
 import React, { useEffect, useState } from "react";
 
+import ErrorHandler from "@component/common/ErrorHandler";
 import PreLoader from "@component/common/PreLoader";
 import SessionWarningDialog from "@component/common/SessionWarningDialog";
 import LoginScreen from "@component/ui/LoginScreen";
@@ -39,6 +40,7 @@ enum AppState {
   Unauthenticated = "unauthenticated",
   Authenticating = "authenticating",
   Authenticated = "authenticated",
+  Error = "error",
 }
 
 // Session timeout: 15 minutes in milliseconds
@@ -131,9 +133,11 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
             );
           }
         }
-      } catch {
+      } catch (error) {
+        console.error("Authentication initialization failed", error);
         if (mounted) {
           dispatch(setAuthError());
+          setAppState(AppState.Error);
         }
       }
     };
@@ -188,6 +192,9 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
 
       case AppState.Authenticated:
         return <AuthContext.Provider value={authContext}>{props.children}</AuthContext.Provider>;
+
+      case AppState.Error:
+        return <ErrorHandler message="Failed to initialize the session. Please sign in again." />;
 
       case AppState.Unauthenticated:
         return (

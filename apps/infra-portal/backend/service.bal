@@ -124,18 +124,17 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         string? githubUserId = userInfo.githubUserId;
         string? githubUsername = ();
+        boolean githubLookupFailed = false;
         if githubUserId is string {
             gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
             if githubUser is error {
-                string customError = "Error while fetching GitHub username for user-info!";
-                log:printError(customError, 'error = githubUser, email = userInfo.email);
-                return <http:InternalServerError>{
-                    body: {
-                        message: customError
-                    }
-                };
+                // The GitHub username is supplementary, so degrade instead of failing the profile.
+                githubLookupFailed = true;
+                log:printWarn("Error while fetching GitHub username for user-info!",
+                        'error = githubUser, email = userInfo.email);
+            } else {
+                githubUsername = githubUser.login;
             }
-            githubUsername = githubUser.login;
         }
 
         UserInfoResponse userInfoResponse = {
@@ -153,9 +152,12 @@ service http:InterceptableService / on new http:Listener(8090) {
             githubUsername
         };
 
-        error? cacheError = cache.put(userInfo.email, userInfoResponse);
-        if cacheError is error {
-            log:printWarn("An error occurred while writing user info to the cache", cacheError);
+        // Avoid caching a profile with a missing GitHub username so the next call can retry.
+        if !githubLookupFailed {
+            error? cacheError = cache.put(userInfo.email, userInfoResponse);
+            if cacheError is error {
+                log:printWarn("An error occurred while writing user info to the cache", cacheError);
+            }
         }
 
         return userInfoResponse;
@@ -1854,8 +1856,9 @@ service http:InterceptableService / on new http:Listener(8090) {
                     log:printError(customError, csRepos);
                     return <http:InternalServerError>{body: {message: customError}};
                 }
-                orgTeams = from var row in csRepos
-                    select {orgName: row.orgName, teamSlug: row.teamSlug};
+                foreach db:OrganizationDefaultRepository row in csRepos {
+                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
+                }
             }
         } else if employee.employmentType == INTERNSHIP {
             db:OrganizationDefaultRepository[]|error orgRepos =
@@ -1873,9 +1876,6 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         map<DefaultAccessRepository[]> reposByOrg = {};
         foreach gh:OrganizationAndTeam ot in orgTeams {
-            if !reposByOrg.hasKey(ot.orgName) {
-                reposByOrg[ot.orgName] = [];
-            }
             gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(ot.orgName, ot.teamSlug);
             if teamRepos is error {
                 log:printWarn(
@@ -1885,6 +1885,9 @@ service http:InterceptableService / on new http:Listener(8090) {
                     team = ot.teamSlug
                 );
                 continue;
+            }
+            if !reposByOrg.hasKey(ot.orgName) {
+                reposByOrg[ot.orgName] = [];
             }
             DefaultAccessRepository[] existing = reposByOrg.get(ot.orgName);
             map<boolean> seen = {};
@@ -1993,8 +1996,9 @@ service http:InterceptableService / on new http:Listener(8090) {
                     log:printError(customError, csRepos);
                     return <http:InternalServerError>{body: {message: customError}};
                 }
-                orgTeams = from var row in csRepos
-                    select {orgName: row.orgName, teamSlug: row.teamSlug};
+                foreach db:OrganizationDefaultRepository row in csRepos {
+                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
+                }
             }
         } else if employee.employmentType == INTERNSHIP {
             db:OrganizationDefaultRepository[]|error orgRepos =
@@ -2050,7 +2054,8 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        string status = membershipResult.successfulMemberships.length() > 0 ? "granted" : "not_granted";
+        string status = membershipResult.failedMemberships.length() == 0 &&
+            membershipResult.successfulMemberships.length() > 0 ? "granted" : "not_granted";
         error? dbResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, status);
         
         if dbResult is error {

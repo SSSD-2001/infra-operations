@@ -6,6 +6,7 @@ import {
     AccordionSummary,
     Avatar,
     Box,
+    Button,
     CircularProgress,
     Link,
     Typography,
@@ -17,10 +18,11 @@ import {
     setDefaultRepositoryAccess,
   } from "@slices/githubOauthAppSlice/githubOauth";
 import { useAppDispatch, useAppSelector } from "@slices/store";
-import { State } from "@root/src/types/types";
+import { State } from "@/types/types";
 import { resolveGitHubConnectionStatus } from "@utils/githubOAuth";
 
 const POLL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 20;
 
 export default function DefaultRepositoryAccessSection() {
     const theme = useTheme();
@@ -31,7 +33,11 @@ export default function DefaultRepositoryAccessSection() {
     const organizations = useAppSelector((s) => s.githubConnect.defaultAccessOrganizations);
     const fetchState = useAppSelector((s) => s.githubConnect.defaultAccessFetchState);
     const defaultAccessState = useAppSelector((s) => s.githubConnect.defaultAccessState);
+    const fetchErrorMessage = useAppSelector((s) => s.githubConnect.defaultAccessErrorMessage);
     const grantAttemptedRef = useRef(false);
+    const pollAttemptsRef = useRef(0);
+    const pollInFlightRef = useRef(false);
+    const [pollTimedOut, setPollTimedOut] = useState(false);
     const [expandedOrg, setExpandedOrg] = useState<string | false>(false);
 
     const handleChange =
@@ -58,7 +64,7 @@ export default function DefaultRepositoryAccessSection() {
             void dispatch(fetchDefaultRepositoryAccess());
           }
         });
-      }, [isConnected, status, defaultAccessState, dispatch]);
+      }, [isConnected, status, fetchState, defaultAccessState, dispatch]);
 
     useEffect(() => {
         if (!isConnected) return;
@@ -68,20 +74,54 @@ export default function DefaultRepositoryAccessSection() {
     }, [isConnected, dispatch, status, organizations.length, defaultAccessState]);
 
     useEffect(() => {
-        if (!isConnected || status !== "granting") return;
-        if (fetchState === State.loading) return;
+        if (!isConnected || status !== "granting") {
+            pollAttemptsRef.current = 0;
+            setPollTimedOut(false);
+            return;
+        }
+        if (pollTimedOut) return;
 
         const id = window.setInterval(() => {
-            void dispatch(fetchDefaultRepositoryAccess());
+            if (pollInFlightRef.current) return;
+            if (pollAttemptsRef.current >= MAX_POLL_ATTEMPTS) {
+                setPollTimedOut(true);
+                window.clearInterval(id);
+                return;
+            }
+            pollAttemptsRef.current += 1;
+            pollInFlightRef.current = true;
+            void dispatch(fetchDefaultRepositoryAccess()).finally(() => {
+                pollInFlightRef.current = false;
+            });
         }, POLL_MS);
         return () => window.clearInterval(id);
-    }, [isConnected, status, fetchState, dispatch]);
+    }, [isConnected, status, pollTimedOut, dispatch]);
 
     if (!isConnected) {
         return (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                 Connect with GitHub from the home page to see default repository access.
             </Typography>
+        );
+    }
+
+    if (pollTimedOut && status === "granting") {
+        return (
+            <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color="error.main">
+                    Granting default repository access is taking longer than expected.
+                </Typography>
+                <Button
+                    size="small"
+                    onClick={() => {
+                        pollAttemptsRef.current = 0;
+                        setPollTimedOut(false);
+                        void dispatch(fetchDefaultRepositoryAccess());
+                    }}
+                >
+                    Retry
+                </Button>
+            </Box>
         );
     }
 
@@ -107,6 +147,19 @@ export default function DefaultRepositoryAccessSection() {
             Checking default repository access...
             </Typography>
         </Box>
+        );
+    }
+
+    if (fetchState === State.failed) {
+        return (
+            <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color="error.main">
+                    {fetchErrorMessage || "Unable to load default repository access."}
+                </Typography>
+                <Button size="small" onClick={() => void dispatch(fetchDefaultRepositoryAccess())}>
+                    Retry
+                </Button>
+            </Box>
         );
     }
 

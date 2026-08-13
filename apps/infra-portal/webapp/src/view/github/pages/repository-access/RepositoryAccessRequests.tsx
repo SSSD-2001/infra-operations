@@ -15,7 +15,7 @@
 // under the License.
 import { Box, Typography, useTheme } from "@mui/material";
 import GitHubConnect from "@component/ui/GitHubConnect";
-import DefaultRepositoryAccessSection from "../../components/DefaultRepositoryAccessSection";
+import DefaultRepositoryAccessSection from "@view/github/components/DefaultRepositoryAccessSection";
 
 export default function RepositoryAccessRequests() {
   const theme = useTheme();
@@ -49,7 +49,7 @@ export default function RepositoryAccessRequests() {
             color: theme.palette.customText.primary.p3.active,
           }}
         >
-          Organizations and repositories you grant access by default.
+          Organizations and repositories you are granted access by default.
         </Typography>
         <DefaultRepositoryAccessSection />
         <GitHubConnect />
