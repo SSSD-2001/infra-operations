@@ -50,22 +50,27 @@ export default function DefaultRepositoryAccessSection() {
         githubUsername,
     });
 
+    const [grantFailed, setGrantFailed] = useState(false);
+
     useEffect(() => {
         if (!isConnected) return;
         if (fetchState !== State.success) return;
         if (status !== "not_granted") return;
         if (defaultAccessState === State.loading) return;
         if (grantAttemptedRef.current) return;
-      
-        grantAttemptedRef.current = true;
-      
-        void dispatch(setDefaultRepositoryAccess()).then((result) => {
-          if (setDefaultRepositoryAccess.fulfilled.match(result)) {
-            void dispatch(fetchDefaultRepositoryAccess());
-          }
-        });
-      }, [isConnected, status, fetchState, defaultAccessState, dispatch]);
 
+        grantAttemptedRef.current = true;
+
+        void dispatch(setDefaultRepositoryAccess()).then((result) => {
+        if (setDefaultRepositoryAccess.fulfilled.match(result)) {
+            setGrantFailed(false);
+            void dispatch(fetchDefaultRepositoryAccess());
+        } else {
+            setGrantFailed(true);
+        }
+        });
+    }, [isConnected, status, fetchState, defaultAccessState, dispatch]);
+    
     useEffect(() => {
         if (!isConnected) return;
         if (status === "granted" && organizations.length > 0) return;
@@ -165,9 +170,30 @@ export default function DefaultRepositoryAccessSection() {
 
     if (status === "not_granted") {
         return (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Default repository access has not been granted yet.
-            </Typography>
+            <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color={grantFailed ? "error.main" : "text.secondary"}>
+                    {grantFailed
+                        ? "Failed to grant default repository access."
+                        : "Default repository access has not been granted yet."}
+                </Typography>
+                {grantFailed && (
+                    <Button
+                        size="small"
+                        onClick={() => {
+                            setGrantFailed(false);
+                            void dispatch(setDefaultRepositoryAccess()).then((result) => {
+                                if (setDefaultRepositoryAccess.fulfilled.match(result)) {
+                                    void dispatch(fetchDefaultRepositoryAccess());
+                                } else {
+                                    setGrantFailed(true);
+                                }
+                            });
+                        }}
+                    >
+                        Retry
+                    </Button>
+                )}
+            </Box>
         );
     }
 
