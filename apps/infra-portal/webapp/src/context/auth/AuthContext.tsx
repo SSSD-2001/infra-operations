@@ -15,7 +15,7 @@
 // under the License.
 import { SecureApp, useAuthContext } from "@asgardeo/auth-react";
 import { useIdleTimer } from "react-idle-timer";
-
+import { Box, Button } from "@mui/material";
 import React, { useEffect, useState } from "react";
 
 import ErrorHandler from "@component/common/ErrorHandler";
@@ -177,6 +177,22 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
     setAppState(AppState.Loading);
   };
 
+  const retrySession = async () => {
+    if (!state.isAuthenticated) {
+      await appSignIn();
+      return;
+    }
+    try {
+      setAppState(AppState.Authenticating);
+      await setupAuthenticatedUser();
+      setAppState(AppState.Authenticated);
+    } catch (error) {
+      console.error("Authentication initialization failed", error);
+      dispatch(setAuthError());
+      setAppState(AppState.Error);
+    }
+  };
+
   const authContext: AuthContextType = {
     appSignIn: appSignIn,
     appSignOut: appSignOut,
@@ -194,8 +210,16 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
         return <AuthContext.Provider value={authContext}>{props.children}</AuthContext.Provider>;
 
       case AppState.Error:
-        return <ErrorHandler message="Failed to initialize the session. Please sign in again." />;
-
+      return (
+        <>
+          <ErrorHandler message="Failed to initialize the session. Please sign in again." />
+          <Box sx={{ display: "flex", justifyContent: "center" }}>
+            <Button variant="contained" onClick={() => void retrySession()}>
+              {state.isAuthenticated ? "Retry" : "Sign in"}
+            </Button>
+          </Box>
+        </>
+      );
       case AppState.Unauthenticated:
         return (
           <AuthContext.Provider value={authContext}>
