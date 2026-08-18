@@ -24,5 +24,5 @@ VALUES
   ("wso2-enterprise", "customer-success-team", "CS"),
   ("wso2", "wso2-all-interns", "INTERN"),
   ("wso2-extensions", "wso2-all-interns", "INTERN"),
-  ("wso2-support", "wso2-all-interns", "INTERN"),
+  ("wso2-enterprise", "wso2-all-interns", "INTERN"),
   ("ballerina-platform", "wso2-all-interns", "INTERN");
