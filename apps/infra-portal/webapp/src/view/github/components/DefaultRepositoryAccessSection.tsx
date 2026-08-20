@@ -55,7 +55,7 @@ export default function DefaultRepositoryAccessSection() {
     useEffect(() => {
         if (!isConnected) return;
         if (fetchState !== State.success) return;
-        if (status !== "not_granted") return;
+        if (status !== "not_granted" && status !== "granting") return;
         if (defaultAccessState === State.loading) return;
         if (grantAttemptedRef.current) return;
 
