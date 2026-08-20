@@ -125,8 +125,9 @@ export default function Greeting({ user, roles }: GreetingProps) {
           if (result.payload.githubUsername) {
             setLocalUsername(result.payload.githubUsername);
           }
-          await dispatch(getUserInfo());
+          setIsVerifiedLocally(true);
           setIsPostConnectLoading(false);
+          await dispatch(getUserInfo());
         
           const grantResult = await dispatch(setDefaultRepositoryAccess());
           if (setDefaultRepositoryAccess.fulfilled.match(grantResult)) {
@@ -293,7 +294,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
         Manage your infrastructure requests and access from one place.
       </Typography>
 
-      {(!isGithubConnected || isPostConnectLoading) && (
+      {!isGithubConnected && (
         <Button
           variant="contained"
           color="primary"
