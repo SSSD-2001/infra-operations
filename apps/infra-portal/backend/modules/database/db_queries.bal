@@ -799,3 +799,228 @@ isolated function getOrganizationDefaultRepositoriesByAccessTypeQuery(string acc
     FROM organizations_default_repositories
     WHERE access_type = ${accessType}
 `;
+
+# Get an access request by id.
+#
+# + id - Access request id
+# + return - Select query
+isolated function getAccessRequestQuery(int id) returns sql:ParameterizedQuery => `
+    SELECT
+        id,
+        email,
+        github_username,
+        lead_email,
+        cc_list,
+        organization_id,
+        org_name,
+        repo_name,
+        permission,
+        justification,
+        state,
+        reviewer_email,
+        review_comment,
+        timestamp,
+        updated_at
+    FROM access_requests
+    WHERE id = ${id}
+`;
+
+# List access requests for a member email.
+#
+# + email - Requester email
+# + return - Select query
+isolated function getAccessRequestsByEmailQuery(string email) returns sql:ParameterizedQuery => `
+    SELECT
+        id,
+        email,
+        github_username,
+        lead_email,
+        cc_list,
+        organization_id,
+        org_name,
+        repo_name,
+        permission,
+        justification,
+        state,
+        reviewer_email,
+        review_comment,
+        timestamp,
+        updated_at
+    FROM access_requests
+    WHERE email = ${email}
+    ORDER BY timestamp DESC
+`;
+
+# Find a Pending access request for the same person and repo.
+#
+# + email - Requester email
+# + orgName - GitHub org login
+# + repoName - Repository name
+# + return - Select query
+isolated function getPendingAccessRequestQuery(string email, string orgName, string repoName)
+    returns sql:ParameterizedQuery => `
+    SELECT
+        id,
+        email,
+        github_username,
+        lead_email,
+        cc_list,
+        organization_id,
+        org_name,
+        repo_name,
+        permission,
+        justification,
+        state,
+        reviewer_email,
+        review_comment,
+        timestamp,
+        updated_at
+    FROM access_requests
+    WHERE email = ${email}
+      AND org_name = ${orgName}
+      AND repo_name = ${repoName}
+      AND state = ${PENDING}
+`;
+
+# Insert a new access request (state = Pending).
+#
+# + payload - Create payload
+# + return - Insert query
+isolated function insertAccessRequestQuery(AccessRequestCreate payload) returns sql:ParameterizedQuery => `
+    INSERT INTO access_requests (
+        email,
+        github_username,
+        lead_email,
+        cc_list,
+        organization_id,
+        org_name,
+        repo_name,
+        permission,
+        justification,
+        state
+    )
+    VALUES (
+        ${payload.email},
+        ${payload.githubUsername},
+        ${payload.leadEmail},
+        ${payload.ccList},
+        ${payload.organizationId},
+        ${payload.orgName},
+        ${payload.repoName},
+        ${payload.permission},
+        ${payload.justification},
+        ${PENDING}
+    )
+`;
+
+
+# Get all repo team leads.
+#
+# + return - Rows or error
+isolated function getRepoTeamLeadsQuery() returns sql:ParameterizedQuery => `
+    SELECT
+        rtl.id,
+        rtl.organization_id,
+        o.organization_name,
+        rtl.team_name,
+        rtl.team_slug,
+        rtl.lead_email
+    FROM repo_team_leads rtl
+    JOIN github_organizations o ON o.organization_id = rtl.organization_id
+    WHERE rtl.active = true
+    ORDER BY o.organization_name, rtl.team_name;
+`;
+
+# Get all repo team lead keys.
+#
+# + return - Rows or error
+isolated function getRepoTeamLeadKeysQuery() returns sql:ParameterizedQuery => `
+    SELECT organization_id, team_slug
+    FROM repo_team_leads
+    WHERE active = true;
+`;
+
+# Deactivate repo team leads for inactive organizations.
+#
+# + return - Error or null if successful
+isolated function deactivateRepoTeamLeadsForInactiveOrgsQuery() returns sql:ParameterizedQuery => `
+    UPDATE repo_team_leads rtl
+    JOIN github_organizations o ON o.organization_id = rtl.organization_id
+    SET rtl.active = FALSE
+    WHERE rtl.active = TRUE AND o.active = FALSE
+`;
+
+# Insert a new repo team lead.
+#
+# + organizationId - Organization id
+# + teamName - Team name
+# + teamSlug - Team slug
+# + leadEmail - Lead email
+# + return - Error or null if successful
+isolated function insertRepoTeamLeadQuery(
+    int organizationId,
+    string teamName,
+    string teamSlug,
+    string? leadEmail
+) returns sql:ParameterizedQuery => `
+    INSERT INTO repo_team_leads (organization_id, team_name, team_slug, lead_email, active)
+    VALUES (${organizationId}, ${teamName}, ${teamSlug}, ${leadEmail}, TRUE)
+    ON DUPLICATE KEY UPDATE
+        team_name = VALUES(team_name),
+        active = TRUE,
+        lead_email = IF(lead_email IS NULL, VALUES(lead_email), lead_email);
+`;
+
+# Update a repo team lead email.
+#
+# + id - ID of the repo team lead
+# + leadEmail - New email for the repo team lead
+# + return - Error or null if successful
+isolated function updateRepoTeamLeadEmailQuery(int id, string leadEmail)
+    returns sql:ParameterizedQuery => `
+    UPDATE repo_team_leads
+    SET lead_email = ${leadEmail}
+    WHERE id = ${id} AND active = true;
+`;
+
+# Get access requests by lead email.
+#
+# + leadEmail - Lead email
+# + return - Rows or error
+isolated function getAccessRequestsByLeadEmailQuery(string leadEmail) returns sql:ParameterizedQuery => `
+    SELECT
+        id, email, github_username, lead_email, cc_list,
+        organization_id, org_name, repo_name, permission,
+        justification, state, reviewer_email, review_comment,
+        timestamp, updated_at
+    FROM access_requests
+    WHERE lead_email = ${leadEmail}
+    ORDER BY timestamp DESC
+`;
+
+# Approve an access request.
+#
+# + id - Access request id
+# + reviewerEmail - Email of the reviewer
+# + return - Error or null if successful
+isolated function approveAccessRequestQuery(int id, string reviewerEmail) returns sql:ParameterizedQuery => `
+    UPDATE access_requests
+    SET state = ${APPROVED},
+        reviewer_email = ${reviewerEmail}
+    WHERE id = ${id} AND state = ${PENDING}
+`;
+
+# Reject an access request.
+#
+# + id - Access request id
+# + reviewerEmail - Email of the reviewer
+# + reviewComment - Comment for the review
+# + return - Error or null if successful
+isolated function rejectAccessRequestQuery(int id, string reviewerEmail, string reviewComment)
+    returns sql:ParameterizedQuery => `
+    UPDATE access_requests
+    SET state = ${REJECTED},
+        reviewer_email = ${reviewerEmail},
+        review_comment = ${reviewComment}
+    WHERE id = ${id} AND state = ${PENDING}
+`;
