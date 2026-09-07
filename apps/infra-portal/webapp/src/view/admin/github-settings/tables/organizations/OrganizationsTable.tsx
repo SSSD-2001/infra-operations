@@ -120,7 +120,6 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
           await dispatch(deleteOrganization(organizationId));
           dispatch(fetchOrganizations());
         } catch {
-          // Handled in thunk
         }
       },
       "Delete",
@@ -145,6 +144,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
       </Box>,
       ConfirmationType.accept,
       async () => {
+        setAddAnchorEl(null);
         try {
           await dispatch(
             addOrganization({
@@ -435,7 +435,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
   }
 
   return (
-    <Box sx={{ gridArea }}>
+    <Box sx={{ gridArea, minWidth: 0, overflow: "hidden" }}>
       <BackgroundLoader open={isMutating} message={organizationsState.errorMessage} />
 
       <Box
