@@ -15,7 +15,7 @@
 // under the License.
 import { GitHub } from "@mui/icons-material";
 import { Box, Grid, alpha, useTheme } from "@mui/material";
-import { BookKey, BookMarked, Settings } from "lucide-react";
+import { BookKey, BookMarked, ClipboardList, Eye, GitPullRequest, Settings } from "lucide-react";
 import { Outlet, useMatch, useNavigate } from "react-router-dom";
 
 import SectionLabel from "@root/src/component/ui/SectionLabel";
@@ -40,126 +40,87 @@ export default function Github() {
 
   const services: ServiceCardProps[] = [
     {
-      icon: <BookMarked size={16} />,
-      iconColor: accent,
-      iconBg: accentBg,
-      tag: {
-        tagName: "all roles",
-        tagBackground: greenBg,
-        tagColor: greenColor,
-      },
-      title: "Repository Requests",
-      description:
-        "Request new GitHub repositories. Set visibility, topics, team access and CI/CD requirements.",
+      icon: <BookKey size={16} />,
+      iconColor: blueColor,
+      iconBg: blueBg,
+      tag: { tagName: "all roles", tagBackground: greenBg, tagColor: greenColor },
+      title: "Repository Access",
+      description: "Default access and organizations you have already granted.",
       roles: [Role.EMPLOYEE],
       features: [
         {
-          label: "Submit a new repository request",
-          //   description: "Fill a 4-step request form",
-          tag: {
-            tagName: "employee",
-            tagBackground: blueBg,
-            tagColor: blueColor,
-          },
-          onClick: () => navigate("repository-requests"),
+          label: "View default access",
+          tag: { tagName: "employee", tagBackground: blueBg, tagColor: blueColor },
+          onClick: () => navigate("repository-access-requests"),
           roles: [Role.EMPLOYEE],
-        },
-        {
-          label: "My Repository Requests",
-          //   description: "View and edit your requests",
-          tag: {
-            tagName: "employee",
-            tagBackground: blueBg,
-            tagColor: blueColor,
-          },
-          onClick: () => navigate("my-requests"),
-          roles: [Role.EMPLOYEE],
-        },
-        {
-          label: "Review pending requests",
-          //   description: "Review and approve/deny pending repository requests",
-          tag: {
-            tagName: "approver",
-            tagBackground: amberBg,
-            tagColor: amberColor,
-          },
-          onClick: () => navigate("review-repository-requests"),
-          roles: [Role.APPROVER],
         },
       ],
     },
     {
-      icon: <BookKey size={16} />,
+      icon: <GitPullRequest size={16} />,
       iconColor: blueColor,
       iconBg: blueBg,
-      tag: {
-        tagName: "all roles",
-        tagBackground: greenBg,
-        tagColor: greenColor,
-      },
-      title: "Repository Access Requests",
-      description:
-        "Request read, write or triage access to an existing repository. Specify the team and access level required.",
+      tag: { tagName: "all roles", tagBackground: greenBg, tagColor: greenColor },
+      title: "Request access",
+      description: "Ask for Read, Triage or Write access to an existing repository.",
       roles: [Role.EMPLOYEE],
       features: [
         {
           label: "Request repository access",
-          //   description: "Fill a 2-step request form",
-          tag: {
-            tagName: "employee",
-            tagBackground: blueBg,
-            tagColor: blueColor,
-          },
-          onClick: () => navigate("repository-access-requests"),
+          tag: { tagName: "employee", tagBackground: blueBg, tagColor: blueColor },
+          onClick: () => navigate("request-existing-repo-access"),
           roles: [Role.EMPLOYEE],
-        },
-        {
-          label: "My Access Requests History",
-          //   description: "View and edit your access requests",
-          tag: {
-            tagName: "employee",
-            tagBackground: blueBg,
-            tagColor: blueColor,
-          },
-          onClick: () => navigate("my-requests"),
-          roles: [Role.EMPLOYEE],
-        },
-        {
-          label: "Review pending requests",
-          //   description: "Review and approve/deny pending access requests",
-          tag: {
-            tagName: "approver",
-            tagBackground: amberBg,
-            tagColor: amberColor,
-          },
-          onClick: () => navigate("review-repository-requests"),
-          roles: [Role.APPROVER],
         },
       ],
     },
     {
-      icon: <Settings size={16} />,
-      iconColor: greenColor,
-      iconBg: greenBg,
-      tag: {
-        tagName: "admin",
-        tagBackground: greenBg,
-        tagColor: greenColor,
-      },
-      title: "Admin Settings",
-      description: "Configure GitHub integration settings and permissions.",
-      roles: [Role.ADMIN],
+      icon: <BookMarked size={16} />,
+      iconColor: accent,
+      iconBg: accentBg,
+      tag: { tagName: "all roles", tagBackground: greenBg, tagColor: greenColor },
+      title: "New Repository",
+      description: "Request a new GitHub repository. Set visibility, topics, team access and CI/CD requirements.",
+      roles: [Role.EMPLOYEE],
       features: [
         {
-          label: "Manage GitHub settings",
-          description: "Configure integration settings and permissions",
-          tag: {
-            tagName: "admin",
-            tagBackground: greenBg,
-            tagColor: greenColor,
-          },
-          onClick: () => navigate("/admin/github-settings"),
-          roles: [Role.ADMIN],
+          label: "Submit a new repository request",
+          tag: { tagName: "employee", tagBackground: blueBg, tagColor: blueColor },
+          onClick: () => navigate("repository-requests"),
+          roles: [Role.EMPLOYEE],
+        },
+      ],
+    },
+    {
+      icon: <ClipboardList size={16} />,
+      iconColor: greenColor,
+      iconBg: greenBg,
+      tag: { tagName: "all roles", tagBackground: greenBg, tagColor: greenColor },
+      title: "My Requests",
+      description: "Track creation and access requests in one place.",
+      roles: [Role.EMPLOYEE],
+      features: [
+        {
+          label: "View my requests",
+          tag: { tagName: "employee", tagBackground: blueBg, tagColor: blueColor },
+          onClick: () => navigate("my-requests"),
+          roles: [Role.EMPLOYEE],
+        },
+      ],
+    },
+    {
+      icon: <Eye size={16} />,
+      iconColor: amberColor,
+      iconBg: amberBg,
+      tag: { tagName: "approver", tagBackground: amberBg, tagColor: amberColor },
+      title: "Review Requests",
+      description: "Approve or reject pending creation and access requests.",
+      roles: [Role.APPROVER],
+      features: [
+        {
+          label: "Review pending requests",
+          tag: { tagName: "approver", tagBackground: amberBg, tagColor: amberColor },
+          onClick: () => navigate("review-repository-requests"),
+          roles: [Role.APPROVER],
         },
       ],
     },
