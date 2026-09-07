@@ -91,7 +91,9 @@ type TokenResponse record {|
 
 # Record to represent a GitHub team.
 public type GitHubTeam record {|
-    # Team slug
+    # The name of the GitHub team
+    string name;
+    # The slug of the GitHub team
     string slug;
     json...;
 |};
@@ -675,4 +677,11 @@ public type EmailVerificationResponse record {|
     string? githubUserId = ();
     # GitHub username null if verification failed.
     string? githubUsername = ();
+|};
+
+# Repository from GET /orgs/{org}/repos.
+public type OrgRepository record {|
+    # The name of the repository
+    string name;
+    json...;
 |};

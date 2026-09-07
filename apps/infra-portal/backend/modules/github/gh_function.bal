@@ -437,6 +437,28 @@ public isolated function getTeamsForOrganization(string orgName, int page, int p
     return githubClient->/orgs/[orgName]/teams.get(perPage = perPage, page = page);
 }
 
+# API Call to get all teams for an organization.
+#
+# + orgName - Organization name
+# + return - List of teams or error
+public isolated function getAllTeamsForOrganization(string orgName) returns GitHubTeam[]|error {
+    http:Client githubClient = check createGithubClient();
+    GitHubTeam[] allTeams = [];
+    int page = 1;
+
+    while true {
+        GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams.get(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allTeams.push(...pageTeams);
+        if pageTeams.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+    return allTeams;
+}
+
 # API Call to add or update team membership for multiple users.
 #
 # + inputs - List of input objects containing organization name, team slug, user name, and role
@@ -518,4 +540,55 @@ public isolated function getTeamRepositories(string orgName, string teamSlug, in
         page += 1;
     }
     return allRepos;
+}
+
+# List repositories in an organization (paginated, capped).
+#
+# + orgName - GitHub org login
+# + maxRepos - Soft cap
+# + return - Repositories or error
+public isolated function getOrganizationRepositories(string orgName, int maxRepos = 200)
+    returns OrgRepository[]|error {
+    http:Client githubClient = check createGithubClient();
+    OrgRepository[] allRepos = [];
+    int page = 1;
+    int perPage = 100;
+
+    while allRepos.length() < maxRepos {
+        OrgRepository[]|error pageRepos =
+            githubClient->/orgs/[orgName]/repos.get(perPage = perPage, page = page, repoType = "all");
+        if pageRepos is error {
+            return pageRepos;
+        }
+        if pageRepos.length() == 0 {
+            break;
+        }
+        foreach OrgRepository repo in pageRepos {
+            allRepos.push(repo);
+            if allRepos.length() >= maxRepos {
+                break;
+            }
+        }
+        if pageRepos.length() < perPage {
+            break;
+        }
+        page += 1;
+    }
+    return allRepos;
+}
+
+public isolated function addRepositoryCollaborator(
+    string orgName, string repoName, string userName, string permission
+) returns error? {
+    http:Client githubClient = check createGithubClient();
+    http:Response|error response =
+    githubClient->/orgs/[orgName]/repos/[orgName]/[repoName]/collaborators/[userName].put({
+        permission: permission
+    });
+    if response is error {
+        return response;
+    }
+    if response.statusCode >= 300 {
+        return error(string `Failed to add collaborator: HTTP ${response.statusCode}`);
+    }
 }
