@@ -13,7 +13,8 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { CheckCircle, Search, Visibility } from "@mui/icons-material";
+import { CheckCircle, Visibility } from "@mui/icons-material";
+import { Search } from "@mui/icons-material";
 import ApprovalIcon from "@mui/icons-material/Approval";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -30,18 +31,20 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControl,
   Grid,
   IconButton,
   InputAdornment,
+  MenuItem,
+  Select,
   TextField,
   Tooltip,
   Typography,
+  alpha,
   useTheme,
 } from "@mui/material";
 import { GridColDef } from "@mui/x-data-grid";
-
-import { useCallback, useEffect, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmationType, State } from "@/types/types";
 import BackgroundLoader from "@component/common/BackgroundLoader";
 import ErrorHandler from "@component/common/ErrorHandler";
@@ -60,99 +63,193 @@ import {
 import { useAppDispatch, useAppSelector } from "@slices/store";
 import { formatDateTime } from "@utils/utils";
 import CustomDataGrid from "@view/admin/github-settings/tables/CustomDataGrid";
+import {
+  fetchAccessRequests,
+  AccessRequest,
+  approveAccessRequest,
+  rejectAccessRequest,
+} from "@slices/accessRequestSlice/accessRequest";
+
+type UnifiedRequest = {
+  rowId: string;
+  kind: "creation" | "access";
+  id: number;
+  requesterEmail: string;
+  repoName: string;
+  organizationName: string;
+  repoType: string;
+  requirement: string;
+  timestamp: string;
+  updatedAt: string;
+  state: RequestApprovalState;
+  creationRequest?: RepositoryRequest;
+  accessRequest?: AccessRequest;
+};
 
 interface RequestHistoryTableProps {
   memberEmailProp?: string;
   leadEmailProp?: string;
   adminEmailProp?: string;
+  kindFilter?: "creation" | "access";
 }
 
 export default function RequestHistoryTable({
   memberEmailProp,
   leadEmailProp,
   adminEmailProp,
+  kindFilter,
 }: RequestHistoryTableProps) {
+
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const repositoryRequest = useAppSelector((state) => state.repositoryRequest);
-
-  const totalRequests = repositoryRequest.repositoryRequests?.totalCount || 0;
-  const pendingRequests = repositoryRequest.repositoryRequests?.pendingCount || 0;
-  const approvedRequests = repositoryRequest.repositoryRequests?.approvedCount || 0;
-  const rejectedRequests = repositoryRequest.repositoryRequests?.rejectedCount || 0;
   const repositoryRequestList = repositoryRequest.repositoryRequests?.repositoryRequests ?? [];
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filteredSearchQuery, setFilteredSearchQuery] = useState<string | null>(null);
-
   const [selectedRequest, setSelectedRequest] = useState<RepositoryRequest | null>(null);
   const [openRequestViewDialog, setOpenRequestViewDialog] = useState(false);
   const [editRequestData, setEditRequestData] = useState<RepositoryRequest | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [takeDecisionData, setTakeDecisionData] = useState<{ id: number; repoName: string } | null>(
-    null,
-  );
+  const [typeFilter, setTypeFilter] = useState<"all" | "creation" | "access">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [takeDecisionData, setTakeDecisionData] = useState<{
+    id: number;
+    repoName: string;
+    kind: "creation" | "access";
+  } | null>(null);
   const [openTakeDecisionDialog, setOpenTakeDecisionDialog] = useState(false);
 
   const dialogContext = useConfirmationModalContext();
-
   const currentUserEmail = memberEmailProp || leadEmailProp || adminEmailProp || "";
+  const isUnified = Boolean(memberEmailProp || leadEmailProp || adminEmailProp);
+  const accessRequestState = useAppSelector((state) => state.accessRequest);
 
   const refetch = useCallback(() => {
     dispatch(
       fetchRepositoryRequests({
         memberEmail: memberEmailProp,
         leadEmail: leadEmailProp,
-        limit: pageSize,
-        offset: page * pageSize,
-        repoName: filteredSearchQuery || undefined,
+        limit: 100,
+        offset: 0,
       }),
     );
-  }, [dispatch, filteredSearchQuery, leadEmailProp, memberEmailProp, page, pageSize]);
-
+    if (memberEmailProp) {
+      void dispatch(fetchAccessRequests());
+    } else if (leadEmailProp) {
+      void dispatch(fetchAccessRequests({ leadEmail: leadEmailProp }));
+    } else if (adminEmailProp) {
+      void dispatch(fetchAccessRequests());
+    }
+  }, [dispatch, leadEmailProp, memberEmailProp, adminEmailProp]);
+  
   useEffect(() => {
     refetch();
-  }, [dispatch, page, pageSize, filteredSearchQuery, memberEmailProp, leadEmailProp, refetch]);
+  }, [dispatch, page, pageSize, memberEmailProp, leadEmailProp, refetch]);
 
+  const accessRequestList = accessRequestState.accessRequests ?? [];
+
+  const unifiedRows: UnifiedRequest[] = useMemo(() => {
+    const creationRows: UnifiedRequest[] = repositoryRequestList.map((req) => ({
+      rowId: `creation-${req.id}`,
+      kind: "creation",
+      id: req.id,
+      requesterEmail: req.email,
+      repoName: req.repoName,
+      organizationName: req.organizationName,
+      repoType: req.repoType,
+      requirement: req.requirement,
+      timestamp: req.timestamp,
+      updatedAt: req.updatedAt,
+      state: req.state,
+      creationRequest: req,
+    }));
+
+    if (!isUnified) return creationRows;
+
+    const accessRows: UnifiedRequest[] = accessRequestList.map((req) => ({
+      rowId: `access-${req.id}`,
+      kind: "access",
+      id: req.id,
+      requesterEmail: req.email,
+      repoName: req.repoName,
+      organizationName: req.orgName,
+      repoType: "—",
+      requirement: req.justification,
+      timestamp: req.timestamp,
+      updatedAt: req.updatedAt ?? "",
+      state: req.state as unknown as RequestApprovalState,
+      accessRequest: req,
+    }));
+
+    return [...creationRows, ...accessRows].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
+  }, [accessRequestList, memberEmailProp, repositoryRequestList]);
+
+  const activeKind = kindFilter ?? (typeFilter === "all" ? undefined : typeFilter);
+
+  const visibleRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return unifiedRows.filter((row) => {
+      const matchesKind = !activeKind || row.kind === activeKind;
+      const matchesSearch = !q || row.repoName.toLowerCase().includes(q);
+      return matchesKind && matchesSearch;
+    });
+  }, [activeKind, searchQuery, unifiedRows]);
+
+  const statusRows = useMemo(() => {
+    return unifiedRows.filter((row) => !activeKind || row.kind === activeKind);
+  }, [activeKind, unifiedRows]);
+
+  const totalRequests = statusRows.length;
+  const pendingRequests = statusRows.filter((r) => r.state === RequestApprovalState.PENDING).length;
+  const approvedRequests = statusRows.filter((r) => r.state === RequestApprovalState.APPROVED).length;
+  const rejectedRequests = statusRows.filter((r) => r.state === RequestApprovalState.REJECTED).length;  
+  
   const handleCloseTakeDecisionDialog = () => {
     setOpenTakeDecisionDialog(false);
     setTakeDecisionData(null);
   };
 
-  const handleApproveRequest = (requestId: number) => {
+  const handleApproveRequest = (requestId: number, kind: "creation" | "access") => {
+    handleCloseTakeDecisionDialog();
     dialogContext.showConfirmation(
       "Confirm Approval",
       <Typography variant="body1">
         <strong>
-          I acknowledge that I have thoroughly reviewed this repository request and confirm that its
-          creation complies with WSO2&apos;s engineering and security best practices.
+          {kind === "access"
+            ? "I acknowledge that I have reviewed this access request and confirm granting GitHub access to this repository."
+            : "I acknowledge that I have thoroughly reviewed this repository request and confirm that its creation complies with WSO2's engineering and security best practices."}
         </strong>
       </Typography>,
       ConfirmationType.accept,
       async () => {
         try {
-          await dispatch(approveRepositoryRequest(requestId)).unwrap();
-          handleCloseTakeDecisionDialog();
+          if (kind === "access") {
+            await dispatch(approveAccessRequest(requestId)).unwrap();
+          } else {
+            await dispatch(approveRepositoryRequest(requestId)).unwrap();
+          }
           refetch();
         } catch {
-          // Approval failed; keep the dialog open. The thunk surfaces an error snackbar.
         }
       },
       "Approve",
       "Cancel",
     );
   };
-
-  const handleRejectRequest = (requestId: number) => {
+  
+  const handleRejectRequest = (requestId: number, kind: "creation" | "access") => {
+    handleCloseTakeDecisionDialog();
     dialogContext.showConfirmation(
       "Reject Request",
       <Box>
         <Typography variant="body1" sx={{ mb: 1 }}>
           <strong>
-            Please note that the repository creation request should be rejected only if the
-            requirement is no longer valid and this decision cannot be reversed.
+            {kind === "access"
+              ? "This access request should be rejected only if the requirement is no longer valid. This cannot be reversed."
+              : "Please note that the repository creation request should be rejected only if the requirement is no longer valid and this decision cannot be reversed."}
           </strong>
         </Typography>
         <Typography variant="body2" sx={{ color: theme.palette.customText.primary.p3.active }}>
@@ -163,16 +260,20 @@ export default function RequestHistoryTable({
       async (comment?: string) => {
         if (typeof comment === "string" && comment.trim() !== "") {
           try {
-            // Save the mandatory rejection comment first; only reject if it succeeds.
-            await dispatch(
-              addComments({
-                requestId: requestId,
-                authorEmail: leadEmailProp || adminEmailProp || "",
-                commentText: `[REJECTED]-${comment}`,
-              }),
-            ).unwrap();
-            await dispatch(rejectRepositoryRequest(requestId)).unwrap();
-            handleCloseTakeDecisionDialog();
+            if (kind === "access") {
+              await dispatch(
+                rejectAccessRequest({ id: requestId, comment: comment.trim() }),
+              ).unwrap();
+            } else {
+              await dispatch(
+                addComments({
+                  requestId: requestId,
+                  authorEmail: leadEmailProp || adminEmailProp || "",
+                  commentText: `[REJECTED]-${comment}`,
+                }),
+              ).unwrap();
+              await dispatch(rejectRepositoryRequest(requestId)).unwrap();
+            }
             refetch();
           } catch {
             // Comment or rejection failed; do not proceed. The thunk surfaces an error snackbar.
@@ -209,11 +310,6 @@ export default function RequestHistoryTable({
     setEditRequestData(null);
   };
 
-  const handleSearch = () => {
-    setFilteredSearchQuery(searchQuery);
-    setPage(0);
-  };
-
   const isLoading = repositoryRequest.state === State.loading;
   const isFetching = repositoryRequest.functionType === "fetch";
   const isMutating =
@@ -239,11 +335,41 @@ export default function RequestHistoryTable({
     />
   );
 
-  const columns: GridColDef<RepositoryRequest>[] = [
-    { field: "id", headerName: "Id", minWidth: 70, flex: 0.6 },
-    { field: "repoName", headerName: "Repository Name", minWidth: 180, flex: 2.5 },
-    { field: "organizationName", headerName: "GitHub Organization", minWidth: 150, flex: 2 },
-    { field: "repoType", headerName: "Visibility", minWidth: 90, flex: 1 },
+  const columns: GridColDef<UnifiedRequest>[] = [ 
+  { field: "id", headerName: "Id", minWidth: 70, flex: 0.6 },
+    {
+      field: "repoName",
+      headerName: "Repository Name",
+      minWidth: 220,
+      flex: 2.5,
+      renderCell: (params) => (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: "100%" }}>
+          <Typography variant="body2" noWrap>{params.row.repoName}</Typography>
+          <Chip
+            label={params.row.kind === "creation" ? "Creation" : "Access"}
+            size="small"
+            sx={{
+              height: "18px",
+              borderRadius: "20px",
+              fontSize: 10,
+              fontWeight: 500,
+              fontFamily: "monospace",
+              background: alpha(theme.palette.neutral["1200"] ?? theme.palette.grey[600], 0.12),
+              color: theme.palette.customText.primary.p3.active,
+              border: `1px solid ${alpha(theme.palette.grey[500], 0.35)}`,
+              "& .MuiChip-label": {
+                px: 1.25,
+                py: 0.5,
+              },
+            }}
+          />
+        </Box>
+      ),
+    },
+    ...(!memberEmailProp
+      ? [{ field: "requesterEmail", headerName: "Requester", minWidth: 180, flex: 1.6 }]
+      : []),
+    { field: "organizationName", headerName: "GitHub Organization", minWidth: 150, flex: 2 },    { field: "repoType", headerName: "Visibility", minWidth: 90, flex: 1 },
     { field: "requirement", headerName: "Requirement", minWidth: 200, flex: 3 },
     {
       field: "timestamp",
@@ -311,27 +437,45 @@ export default function RequestHistoryTable({
       renderCell: (params) => (
         <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
           <Tooltip title="View More" arrow>
-            <IconButton color="info" size="small" onClick={() => handleViewRequest(params.row)}>
+            <IconButton
+              color="info"
+              size="small"
+              onClick={() => {
+                if (params.row.kind === "creation" && params.row.creationRequest) {
+                  handleViewRequest(params.row.creationRequest);
+                }
+              }}
+            >
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
-          {memberEmailProp && params.row.state === RequestApprovalState.PENDING && (
-            <Tooltip title="Edit Request" arrow>
-              <IconButton
-                color="primary"
-                size="small"
-                onClick={() => handleEditRequest(params.row)}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {!memberEmailProp && params.row.state === RequestApprovalState.PENDING && (
+          {memberEmailProp &&
+            params.row.kind === "creation" &&
+            params.row.state === RequestApprovalState.PENDING && (
+              <Tooltip title="Edit Request" arrow>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => {
+                    if (params.row.creationRequest) {
+                      handleEditRequest(params.row.creationRequest);
+                    }
+                  }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!memberEmailProp && params.row.state === RequestApprovalState.PENDING && (
             <Tooltip title="Take Decision" arrow>
               <IconButton
                 size="small"
                 onClick={() => {
-                  setTakeDecisionData({ id: params.row.id, repoName: params.row.repoName });
+                  setTakeDecisionData({
+                    id: params.row.id,
+                    repoName: params.row.repoName,
+                    kind: params.row.kind,
+                  });
                   setOpenTakeDecisionDialog(true);
                 }}
               >
@@ -425,46 +569,60 @@ export default function RequestHistoryTable({
             theme.palette.error.main,
             <CancelIcon color="error" />,
           )}
-          <TextField
-            label="Search by Repository Name"
-            size="small"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
-            }}
-            autoComplete="off"
-            spellCheck={false}
-            sx={{ width: 280, ml: "auto", "& .MuiInputBase-root": { pr: 0 } }}
-            slotProps={{
-              input: {
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={handleSearch} sx={{ borderRadius: 0 }}>
-                      <Search />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
+            {!kindFilter && (
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <Select
+                  value={typeFilter}
+                  onChange={(e) =>
+                    setTypeFilter(e.target.value as "all" | "creation" | "access")
+                  }
+                  displayEmpty
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="creation">Creation</MenuItem>
+                  <MenuItem value="access">Access</MenuItem>
+                </Select>
+              </FormControl>
+            )}
+            <TextField
+              size="small"
+              placeholder="Search by Repository Name"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoComplete="off"
+              sx={{ width: 260 }}
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Search fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Box>
         </Box>
 
         <Box sx={{ width: "100%", height: 560 }}>
-          <CustomDataGrid
-            columns={columns}
-            rows={isLoading ? [] : repositoryRequestList}
-            rowCount={totalRequests}
-            paginationMode="server"
-            getRowId={(row) => row.id}
-            rowHeight={47}
-            paginationModel={{ pageSize, page }}
-            onPaginationModelChange={(model) => {
-              setPageSize(model.pageSize);
-              setPage(model.page);
-            }}
-            loading={isLoading && isFetching}
-          />
+        <CustomDataGrid
+          columns={columns}
+          rows={isLoading ? [] : visibleRows}
+          getRowId={(row) => row.rowId}
+          rowCount={visibleRows.length}
+          paginationMode="client"
+          rowHeight={47}
+          paginationModel={{ pageSize, page }}
+          onPaginationModelChange={(model) => {
+            setPageSize(model.pageSize);
+            setPage(model.page);
+          }}
+          loading={
+            (isLoading && isFetching) ||
+            (isUnified && accessRequestState.state === State.loading)
+          }
+        />
         </Box>
       </Box>
 
@@ -664,7 +822,9 @@ export default function RequestHistoryTable({
             variant="contained"
             color="success"
             startIcon={<CheckCircle />}
-            onClick={() => takeDecisionData && handleApproveRequest(takeDecisionData.id)}
+            onClick={() =>
+              takeDecisionData && handleApproveRequest(takeDecisionData.id, takeDecisionData.kind)
+            }
             sx={{ minWidth: 120 }}
           >
             Approve
@@ -673,7 +833,9 @@ export default function RequestHistoryTable({
             variant="contained"
             color="error"
             startIcon={<CancelIcon />}
-            onClick={() => takeDecisionData && handleRejectRequest(takeDecisionData.id)}
+            onClick={() =>
+              takeDecisionData && handleRejectRequest(takeDecisionData.id, takeDecisionData.kind)
+            }
             sx={{ minWidth: 120 }}
           >
             Reject

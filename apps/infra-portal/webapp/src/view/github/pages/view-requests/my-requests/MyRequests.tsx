@@ -13,14 +13,16 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { Box, Typography, useTheme } from "@mui/material";
-
+import { Box, Tab, Tabs, Typography, useTheme } from "@mui/material";
+import { useState } from "react";
 import RequestHistoryTable from "@component/common/request/RequestHistoryTable";
 import { useAppSelector } from "@slices/store";
 
 export default function MyRequests() {
   const theme = useTheme();
   const userInfo = useAppSelector((state) => state.user.userInfo);
+  const [activeTab, setActiveTab] = useState(0);
+
 
   return (
     <Box>
@@ -28,12 +30,25 @@ export default function MyRequests() {
         variant="h6"
         sx={{ fontWeight: 600, mt: 3, color: theme.palette.customText.primary.p1.active }}
       >
-        My Repository Requests
+        My Requests
       </Typography>
       <Typography variant="body2" sx={{ color: theme.palette.customText.primary.p3.active }}>
         View, edit and resubmit your pending requests, and track their decisions.
       </Typography>
-      {userInfo?.workEmail && <RequestHistoryTable memberEmailProp={userInfo.workEmail} />}
+      <Tabs
+        value={activeTab}
+        onChange={(_, value) => setActiveTab(value)}
+        sx={{ mt: 1, borderBottom: `1px solid ${theme.palette.divider}` }}
+      >
+        <Tab label="Creation" />
+        <Tab label="Access" />
+      </Tabs>
+      {userInfo?.workEmail && (
+        <RequestHistoryTable
+          memberEmailProp={userInfo.workEmail}
+          kindFilter={activeTab === 0 ? "creation" : "access"}
+        />
+      )}
     </Box>
   );
 }
