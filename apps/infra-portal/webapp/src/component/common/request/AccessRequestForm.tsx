@@ -40,7 +40,7 @@ import { AppConfig } from "@config/config";
 import { APIService } from "@utils/apiService";
 import { AccessPermission, addAccessRequest } from "@slices/accessRequestSlice/accessRequest";
 import { fetchEmployees } from "@slices/employeeSlice/employee";
-import { fetchLeads } from "@slices/leadsSlice/leads";
+import { fetchRepoTeamLeads } from "@slices/repoTeamLeadsSlice/repoTeamLeads";
 import { fetchOrganizations } from "@slices/organizationsSlice/organizations";
 import { fetchAccessRequests, AccessRequestState } from "@slices/accessRequestSlice/accessRequest";
 import { fetchDefaultRepositoryAccess } from "@slices/githubOauthAppSlice/githubOauth";
@@ -89,7 +89,8 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
         const defaultAccessStatus = useAppSelector((s) => s.githubConnect.defaultAccessStatus);
         const organizationsState = useAppSelector((s) => s.organizations);
         const employeesState = useAppSelector((state) => state.employee.employees);
-        const leadsState = useAppSelector((s) => s.leads);
+        const repoTeamLeads = useAppSelector((s) => s.repoTeamLeads.repoTeamLeads) ?? [];
+        const repoTeamLeadsState = useAppSelector((s) => s.repoTeamLeads.state);
         const submitState = useAppSelector((s) => s.accessRequest.submitState);
         const defaultAccessOrganizations = useAppSelector((s) => s.githubConnect.defaultAccessOrganizations);
         const accessRequests = useAppSelector((s) => s.accessRequest.accessRequests);
@@ -105,7 +106,7 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
   
         useEffect(() => {
             dispatch(fetchOrganizations());
-            dispatch(fetchLeads());
+            dispatch(fetchRepoTeamLeads());
             dispatch(fetchEmployees());
             dispatch(fetchDefaultRepositoryAccess());
             dispatch(fetchAccessRequests());
@@ -200,7 +201,7 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             ?.repositories.forEach((repo) => names.add(repo.name));
       
         return names;
-        }, [accessRequests, defaultAccessOrganizations, formik.values.orgName]);
+        }, [accessRequests, creationRequests, defaultAccessOrganizations, formik.values.orgName]);
 
     useEffect(() => {
         const organizationId = formik.values.organizationId;
@@ -253,7 +254,15 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             </Alert>
         );
     }
-  
+
+    const orgLeads = Array.from(
+        new Set(
+            repoTeamLeads
+                .filter((lead) => lead.organizationId === formik.values.organizationId && lead.leadEmail)
+                .map((lead) => lead.leadEmail as string),
+        ),
+    );
+
     return (
         <Box component="form" onSubmit={formik.handleSubmit}>
             {submitState === State.loading && (
@@ -278,6 +287,7 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
                     formik.setFieldValue("organizationId", selectedId);
                     formik.setFieldValue("orgName", selectedOrg?.organizationName || "");
                     formik.setFieldValue("repoName", "");
+                    formik.setFieldValue("leadEmail", "");
                 }}
             >
                 {organizationsState.state === State.loading ? (
@@ -355,7 +365,6 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
                 error={formik.touched.justification && !!formik.errors.justification}
                 helperText={formik.touched.justification && formik.errors.justification}
         />
-  
         <FormControl
             fullWidth
             size="small"
@@ -368,18 +377,20 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
                 name="leadEmail"
                 value={formik.values.leadEmail}
                 onChange={formik.handleChange}
-                disabled={leadsState.state === State.loading}
+                disabled={repoTeamLeadsState === State.loading || !formik.values.organizationId}
             >
-                {leadsState.state === State.loading ? (
-                <MenuItem disabled>Loading...</MenuItem>
-                ) : Array.isArray(leadsState.leads) && leadsState.leads.length > 0 ? (
-                leadsState.leads.map((lead) => (
-                    <MenuItem key={lead.leadId} value={lead.leadEmail}>
-                    {lead.leadEmail} - {lead.teamName}
-                    </MenuItem>
-                ))
+                {repoTeamLeadsState === State.loading ? (
+                    <MenuItem disabled>Loading...</MenuItem>
+                ) : !formik.values.organizationId ? (
+                    <MenuItem disabled>Select an organization first</MenuItem>
+                ) : orgLeads.length > 0 ? (
+                    orgLeads.map((email) => (
+                        <MenuItem key={email} value={email}>
+                            {email}
+                        </MenuItem>
+                    ))
                 ) : (
-                <MenuItem disabled>No leads available</MenuItem>
+                    <MenuItem disabled>No leads available</MenuItem>
                 )}
             </Select>
             {formik.touched.leadEmail && formik.errors.leadEmail && (

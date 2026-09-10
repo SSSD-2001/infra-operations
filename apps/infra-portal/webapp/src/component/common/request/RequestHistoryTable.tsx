@@ -436,19 +436,17 @@ export default function RequestHistoryTable({
       disableColumnMenu: true,
       renderCell: (params) => (
         <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+          {params.row.kind === "creation" && params.row.creationRequest && (
           <Tooltip title="View More" arrow>
             <IconButton
               color="info"
               size="small"
-              onClick={() => {
-                if (params.row.kind === "creation" && params.row.creationRequest) {
-                  handleViewRequest(params.row.creationRequest);
-                }
-              }}
+              onClick={() => handleViewRequest(params.row.creationRequest!)}
             >
               <Visibility fontSize="small" />
             </IconButton>
           </Tooltip>
+        )}
           {memberEmailProp &&
             params.row.kind === "creation" &&
             params.row.state === RequestApprovalState.PENDING && (

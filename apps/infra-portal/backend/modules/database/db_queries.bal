@@ -513,17 +513,25 @@ isolated function getOrganizationsQuery() returns sql:ParameterizedQuery => `
 # + return - Query to get an organization by name
 isolated function getOrganizationByNameQuery(string organizationName) returns sql:ParameterizedQuery => `
     SELECT 
-        organization_id AS organizationId,
-        organization_name AS organizationName,
-        visibility AS organizationVisibility,
-        plan AS organizationPlan,
-        enable_issues AS enableIssues,
-        active AS active
+        o.organization_id AS organizationId,
+        o.organization_name AS organizationName,
+        o.visibility AS organizationVisibility,
+        o.plan AS organizationPlan,
+        o.enable_issues AS enableIssues,
+        o.active AS active,
+        GROUP_CONCAT(dt.team_name) AS defaultTeams,
+        GROUP_CONCAT(dt.team_id) AS teamIds
     FROM 
-        github_organizations
+        github_organizations o
+    LEFT JOIN 
+        organization_default_teams odt ON o.organization_id = odt.organization_id
+    LEFT JOIN 
+        default_teams dt ON odt.team_id = dt.team_id
     WHERE 
-        organization_name = ${organizationName}
-    `;
+        o.organization_name = ${organizationName}
+    GROUP BY 
+        o.organization_id, o.organization_name, o.visibility, o.plan, o.enable_issues, o.active
+`;
 
 # Query to get an organization by id.
 #
@@ -927,7 +935,7 @@ isolated function getRepoTeamLeadsQuery() returns sql:ParameterizedQuery => `
         rtl.lead_email
     FROM repo_team_leads rtl
     JOIN github_organizations o ON o.organization_id = rtl.organization_id
-    WHERE rtl.active = true
+    WHERE rtl.active = true AND o.active = true
     ORDER BY o.organization_name, rtl.team_name;
 `;
 
@@ -935,9 +943,27 @@ isolated function getRepoTeamLeadsQuery() returns sql:ParameterizedQuery => `
 #
 # + return - Rows or error
 isolated function getRepoTeamLeadKeysQuery() returns sql:ParameterizedQuery => `
-    SELECT organization_id, team_slug
+    SELECT organization_id, team_slug, lead_email
     FROM repo_team_leads
     WHERE active = true;
+`;
+
+# Fill lead_email only when empty or still the sync default.
+#
+# + organizationId - Organization id
+# + teamSlug - Team slug
+# + leadEmail - Lead email to set
+# + return - Parameterized update query
+isolated function fillRepoTeamLeadEmailQuery(
+    int organizationId,
+    string teamSlug,
+    string? leadEmail
+) returns sql:ParameterizedQuery => `
+    UPDATE repo_team_leads
+    SET lead_email = ${leadEmail}
+    WHERE organization_id = ${organizationId}
+      AND team_slug = ${teamSlug}
+      AND active = TRUE;
 `;
 
 # Deactivate repo team leads for inactive organizations.
@@ -948,6 +974,58 @@ isolated function deactivateRepoTeamLeadsForInactiveOrgsQuery() returns sql:Para
     JOIN github_organizations o ON o.organization_id = rtl.organization_id
     SET rtl.active = FALSE
     WHERE rtl.active = TRUE AND o.active = FALSE
+`;
+
+# Deactivate repo team leads for an organization.
+#
+# + organizationId - Organization id
+# + return - Error or null if successful
+isolated function deactivateRepoTeamLeadsByOrganizationQuery(int organizationId)
+    returns sql:ParameterizedQuery => `
+    UPDATE repo_team_leads
+    SET active = FALSE
+    WHERE organization_id = ${organizationId}
+      AND active = TRUE
+`;
+
+# Deactivate a repo team lead.
+#
+# + organizationId - Organization id
+# + teamSlug - Team slug
+# + return - Error or null if successful
+isolated function deactivateRepoTeamLeadQuery(int organizationId, string teamSlug)
+    returns sql:ParameterizedQuery => `
+    UPDATE repo_team_leads
+    SET active = FALSE
+    WHERE organization_id = ${organizationId}
+      AND team_slug = ${teamSlug}
+      AND active = TRUE
+`;
+
+# Check if a repo team lead exists.
+#
+# + organizationId - Organization id
+# + leadEmail - Lead email
+# + return - Error or null if successful
+isolated function isRepoTeamLeadQuery(int organizationId, string leadEmail)
+    returns sql:ParameterizedQuery => `
+    SELECT id
+    FROM repo_team_leads
+    WHERE organization_id = ${organizationId}
+      AND lead_email = ${leadEmail}
+      AND active = TRUE
+    LIMIT 1
+`;
+
+# Revert an access request to pending.
+#
+# + id - Access request id
+# + return - Error or null if successful
+isolated function revertAccessRequestToPendingQuery(int id) returns sql:ParameterizedQuery => `
+    UPDATE access_requests
+    SET state = ${PENDING},
+        reviewer_email = NULL
+    WHERE id = ${id} AND state = ${APPROVED}
 `;
 
 # Insert a new repo team lead.
@@ -969,6 +1047,25 @@ isolated function insertRepoTeamLeadQuery(
         team_name = VALUES(team_name),
         active = TRUE,
         lead_email = IF(lead_email IS NULL, VALUES(lead_email), lead_email);
+`;
+
+# Seed a repo team lead with a null email (used when an org is added).
+#
+# + organizationId - Organization id
+# + teamName - Team name
+# + teamSlug - Team slug
+# + return - Error or null if successful
+isolated function seedRepoTeamLeadQuery(
+    int organizationId,
+    string teamName,
+    string teamSlug
+) returns sql:ParameterizedQuery => `
+    INSERT INTO repo_team_leads (organization_id, team_name, team_slug, lead_email, active)
+    VALUES (${organizationId}, ${teamName}, ${teamSlug}, NULL, TRUE)
+    ON DUPLICATE KEY UPDATE
+        team_name = VALUES(team_name),
+        active = TRUE,
+        lead_email = NULL;
 `;
 
 # Update a repo team lead email.

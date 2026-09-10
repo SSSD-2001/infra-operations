@@ -202,7 +202,7 @@ import {
     const isFetching = repoTeamLeadsState.functionType === "fetch";
     const isMutating = isLoading && !isFetching && !!repoTeamLeadsState.repoTeamLeads;
   
-    if (repoTeamLeadsState.state === State.failed) {
+    if (repoTeamLeadsState.state === State.failed && !repoTeamLeadsState.repoTeamLeads?.length) {
       return <ErrorHandler message="Failed to fetch repo team leads." />;
     }
   
@@ -233,6 +233,7 @@ import {
             action={
               <Tooltip title="Sync from GitHub" arrow>
                 <IconButton
+                  disabled={repoTeamLeadsState.functionType === "sync"}
                   onClick={() => handleSync()}
                   sx={{
                     width: 28,

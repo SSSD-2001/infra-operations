@@ -51,8 +51,21 @@ public isolated function verifyReadOnlyTeam(string orgName) returns boolean|erro
 # + return - List of teams or error
 public isolated function getInternalCommitterTeams(string orgName) returns string[]|error {
     http:Client githubClient = check createGithubClient();
-    GitHubTeam[] teamsResponse = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams;
-    return from var team in teamsResponse
+    GitHubTeam[] allTeams = [];
+    int page = 1;
+
+    while true {
+        GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allTeams.push(...pageTeams);
+        if pageTeams.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+
+    return from var team in allTeams
         where team.slug.includes(INTERNAL_COMMITTER_FORMAT)
         select team.slug;
 }
@@ -457,6 +470,55 @@ public isolated function getAllTeamsForOrganization(string orgName) returns GitH
         page += 1;
     }
     return allTeams;
+}
+
+# List team maintainers (paginated).
+#
+# + orgName - Organization login
+# + teamSlug - Team slug
+# + return - Maintainer members or error
+public isolated function getTeamMaintainers(string orgName, string teamSlug) returns TeamMember[]|error {
+    http:Client githubClient = check createGithubClient();
+    return githubClient->/orgs/[orgName]/teams/[teamSlug]/members.get(
+        role = "maintainer", perPage = DEFAULT_LIMIT, page = 1
+    );
+}
+
+# Map a GitHub maintainer to a WSO2 work email.
+#
+# + member - GitHub team member
+# + employeeEmails - Lowercased HR work emails
+# + loginEmailCache - Cache of login -> resolved email
+# + return - WSO2 email or ()
+public isolated function resolveMaintainerWorkEmail(
+    TeamMember member,
+    map<boolean> employeeEmails,
+    map<string?> loginEmailCache
+) returns string? {
+    string loginKey = member.login.toLowerAscii();
+    if loginEmailCache.hasKey(loginKey) {
+        return loginEmailCache[loginKey];
+    }
+
+    string? resolved = ();
+    string? memberEmail = member?.email;
+    if memberEmail is string && isKnownWso2Employee(memberEmail, employeeEmails) {
+        resolved = memberEmail.toLowerAscii();
+    }
+
+    if resolved is () {
+        string guessed = string `${loginKey}@wso2.com`;
+        if employeeEmails.hasKey(guessed) {
+            resolved = guessed;
+        }
+    }
+
+    loginEmailCache[loginKey] = resolved;
+    return resolved;
+}
+
+isolated function isKnownWso2Employee(string email, map<boolean> employeeEmails) returns boolean {
+    return email.toLowerAscii().endsWith("@wso2.com");
 }
 
 # API Call to add or update team membership for multiple users.

@@ -54,7 +54,11 @@ service class ErrorInterceptor {
     }
 }
 
-service http:InterceptableService / on new http:Listener(8090) {
+listener http:Listener httpListener = new (8090, {
+    timeout: 300
+});
+
+service http:InterceptableService / on httpListener {
 
     # Request interceptor.
     #
@@ -954,7 +958,22 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
-
+        db:Organization|error savedOrg = db:getOrganizationByName(newOrganization.organizationName);
+        if savedOrg is error {
+            log:printError("Organization saved but could not load it for team seed", savedOrg);
+            return http:CREATED;
+        }
+        gh:GitHubTeam[]|error teams = gh:getAllTeamsForOrganization(savedOrg.organizationName);
+        if teams is error {
+            log:printWarn("Could not seed repo team leads; Sync can still add them", teams);
+            return http:CREATED;
+        }
+        foreach gh:GitHubTeam team in teams {
+            error? inserted = db:seedRepoTeamLead(savedOrg.organizationId, team.name, team.slug);
+            if inserted is error {
+                log:printWarn("Failed to seed repo team lead row", inserted, teamSlug = team.slug);
+            }
+        }
         return http:CREATED;
     }
 
@@ -1537,6 +1556,14 @@ service http:InterceptableService / on new http:Listener(8090) {
     # + return - result of syncing repo team leads or error
     isolated resource function post repo\-team\-leads/sync(http:RequestContext ctx)
         returns db:RepoTeamLeadSyncResult|http:Forbidden|http:InternalServerError {
+        
+        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
+        if userInfo is error {
+            return <http:InternalServerError>{body: {message: "User information header not found!"}};
+        }
+        if !authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
+            return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
+        }
 
         db:Organization[]|error organizations = db:getOrganizations();
         if organizations is error {
@@ -1553,34 +1580,101 @@ service http:InterceptableService / on new http:Listener(8090) {
             existing[string `${key.organizationId}|${key.teamSlug}`] = true;
         }
 
+        map<string?> existingEmails = {};
+        foreach var key in existingKeys {
+            existingEmails[string `${key.organizationId}|${key.teamSlug}`] = key.leadEmail;
+        }
+
         int|error deactivated = db:deactivateRepoTeamLeadsForInactiveOrgs();
         if deactivated is error {
             return <http:InternalServerError>{body: {message: "Error while removing stale repo team leads!"}};
         }
         int deletedCount = deactivated;
 
+        map<string?> githubIdEmailCache = {};
         int addedCount = 0;
+        int updatedCount = 0;
         foreach db:Organization org in organizations {
             gh:GitHubTeam[]|error teams = gh:getAllTeamsForOrganization(org.organizationName);
             if teams is error {
                 log:printError("Error fetching GitHub teams", teams, organizationName = org.organizationName);
                 continue;
             }
+            map<boolean> fetchedSlugs = {};
             foreach gh:GitHubTeam team in teams {
+                fetchedSlugs[team.slug] = true;
                 string mapKey = string `${org.organizationId}|${team.slug}`;
-                if existing.hasKey(mapKey) {
+                boolean isNew = !existing.hasKey(mapKey);
+                string? currentEmail = existingEmails[mapKey];
+                boolean needsLead = isNew
+                    || currentEmail is ()
+                    || currentEmail == "";
+                if !needsLead {
                     continue;
                 }
-                string? leadEmail = gh:DEFAULT_REPO_TEAM_LEAD_EMAIL;
-                error? inserted = db:insertRepoTeamLead(org.organizationId, team.name, team.slug, leadEmail);
-                if inserted is error {
-                    return <http:InternalServerError>{body: {message: "Error while inserting repo team lead!"}};
+
+                string? resolvedEmail = ();
+                gh:TeamMember[]|error maintainers = gh:getTeamMaintainers(org.organizationName, team.slug);
+                if maintainers is error {
+                    log:printWarn("Error fetching team maintainers", maintainers,
+                        organizationName = org.organizationName, teamSlug = team.slug);
+                } else {
+                    foreach gh:TeamMember maintainer in maintainers {
+                            string idKey = maintainer.id.toString();
+                            if githubIdEmailCache.hasKey(idKey) {
+                                resolvedEmail = githubIdEmailCache[idKey];
+                            } else {
+                                string?|error mapped = scim:searchWorkEmailByGithubUserId(idKey);
+                                if mapped is error {
+                                    log:printWarn("Asgardeo GitHub user id lookup failed", mapped,
+                                        githubUserId = idKey, githubLogin = maintainer.login);
+                                    githubIdEmailCache[idKey] = ();
+                                } else {
+                                    githubIdEmailCache[idKey] = mapped;
+                                    resolvedEmail = mapped;
+                                }
+                            }
+                        if resolvedEmail is string {
+                            break;
+                        }
+                    }
                 }
-                addedCount += 1;
+
+                string leadEmail = resolvedEmail is string
+                    ? resolvedEmail
+                    : gh:DEFAULT_REPO_TEAM_LEAD_EMAIL;
+
+                if isNew {
+                    error? inserted = db:insertRepoTeamLead(org.organizationId, team.name, team.slug, leadEmail);
+                    if inserted is error {
+                        return <http:InternalServerError>{body: {message: "Error while inserting repo team lead!"}};
+                    }
+                    addedCount += 1;
+                } else {
+                    int|error filled = db:fillRepoTeamLeadEmail(
+                        org.organizationId, team.slug, leadEmail
+                    );
+                    if filled is error {
+                        return <http:InternalServerError>{body: {message: "Error while updating repo team lead!"}};
+                    }
+                    updatedCount += filled;
+                }
+            }
+            foreach var key in existingKeys {
+                if key.organizationId != org.organizationId {
+                    continue;
+                }
+                if fetchedSlugs.hasKey(key.teamSlug) {
+                    continue;
+                }
+                int|error removed = db:deactivateRepoTeamLead(key.organizationId, key.teamSlug);
+                if removed is error {
+                    return <http:InternalServerError>{body: {message: "Error while removing stale repo team leads!"}};
+                }
+                deletedCount += removed;
             }
         }
-
-        return {addedCount, deletedCount};
+        return {addedCount, deletedCount, updatedCount};
     }
 
     # Update a repo team lead email.
@@ -2028,7 +2122,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                     continue;
                 }
                 seen[repo.name] = true;
-                existing.push({name: repo.name, htmlUrl: repo.htmlUrl});
+                existing.push({name: repo.name, htmlUrl: repo.url});
             }
             reposByOrg[ot.orgName] = existing;
         }
@@ -2261,16 +2355,20 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:Forbidden>{body: {message: "Only the assigned lead can approve this request!"}};
         }
 
+        error? dbResult = db:approveAccessRequest(id, userInfo.email);
+        if dbResult is error {
+            return <http:BadRequest>{body: {message: "Access request is not Pending!"}};
+        }
+
         error? ghResult = gh:addRepositoryCollaborator(
             request.orgName, request.repoName, request.githubUsername, request.permission);
         if ghResult is error {
             log:printError("Failed to add GitHub collaborator!", ghResult);
+            error? reverted = db:revertAccessRequestToPending(id);
+            if reverted is error {
+                log:printError("Failed to revert access request after GitHub error!", reverted);
+            }
             return <http:InternalServerError>{body: {message: "Failed to grant GitHub access!"}};
-        }
-
-        error? dbResult = db:approveAccessRequest(id, userInfo.email);
-        if dbResult is error {
-            return <http:InternalServerError>{body: {message: "GitHub access granted, but failed to update request!"}};
         }
         return http:OK;
     }
@@ -2339,6 +2437,11 @@ service http:InterceptableService / on new http:Listener(8090) {
         if request is () {
             return <http:NotFound>{body: {message: string `No access request found with ID: ${id}`}};
         }
+        boolean isAdmin = authorization:checkPermissions(
+            [authorization:authorizedRoles.admin], userInfo.groups);
+        if request.email != userInfo.email && request.leadEmail != userInfo.email && !isAdmin {
+            return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
+        }
         return request;
     }
 
@@ -2400,6 +2503,17 @@ service http:InterceptableService / on new http:Listener(8090) {
         if pending is db:AccessRequest {
             return <http:BadRequest>{
                 body: {message: "A pending access request already exists for this repository."}
+            };
+        }
+
+        boolean|error isLead = db:isRepoTeamLead(payload.organizationId, payload.leadEmail);
+        if isLead is error {
+            log:printError("Error while validating repo team lead!", isLead);
+            return <http:InternalServerError>{body: {message: "Error while validating repo team lead!"}};
+        }
+        if !isLead {
+            return <http:BadRequest>{
+                body: {message: "leadEmail must be an active repo team lead for this organization."}
             };
         }
 

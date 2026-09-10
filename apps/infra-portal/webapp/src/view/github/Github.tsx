@@ -15,7 +15,7 @@
 // under the License.
 import { GitHub } from "@mui/icons-material";
 import { Box, Grid, alpha, useTheme } from "@mui/material";
-import { BookKey, BookMarked, ClipboardList, Eye, GitPullRequest, Settings } from "lucide-react";
+import { BookKey, BookMarked, ClipboardList, Eye, GitPullRequest } from "lucide-react";
 import { Outlet, useMatch, useNavigate } from "react-router-dom";
 
 import SectionLabel from "@root/src/component/ui/SectionLabel";
@@ -61,7 +61,7 @@ export default function Github() {
       iconColor: blueColor,
       iconBg: blueBg,
       tag: { tagName: "all roles", tagBackground: greenBg, tagColor: greenColor },
-      title: "Request access",
+      title: "Request Access",
       description: "Ask for Read, Triage or Write access to an existing repository.",
       roles: [Role.EMPLOYEE],
       features: [
@@ -114,13 +114,13 @@ export default function Github() {
       tag: { tagName: "approver", tagBackground: amberBg, tagColor: amberColor },
       title: "Review Requests",
       description: "Approve or reject pending creation and access requests.",
-      roles: [Role.APPROVER],
+      roles: [Role.APPROVER, Role.ADMIN],
       features: [
         {
           label: "Review pending requests",
           tag: { tagName: "approver", tagBackground: amberBg, tagColor: amberColor },
           onClick: () => navigate("review-repository-requests"),
-          roles: [Role.APPROVER],
+          roles: [Role.APPROVER, Role.ADMIN],
         },
       ],
     },

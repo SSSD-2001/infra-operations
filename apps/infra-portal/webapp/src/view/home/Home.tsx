@@ -19,13 +19,11 @@ import { Box, Grid, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { BookMarked, BookKey, ClipboardList, Eye, GitPullRequest, Workflow } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
 import { useEffect } from "react";
-
 import { Role } from "@root/src/slices/authSlice/auth";
 import { fetchRepositoryRequests } from "@root/src/slices/repositoryRequestSlice/repositoryRequest";
 import { RootState, useAppDispatch, useAppSelector } from "@root/src/slices/store";
-
+import { fetchDefaultRepositoryAccess } from "@root/src/slices/githubOauthAppSlice/githubOauth";
 import SectionLabel from "../../component/ui/SectionLabel";
 import Greeting from "./Greeting/Greeting";
 import InfraServices from "./InfraServices/InfraServices";
@@ -48,8 +46,9 @@ export default function Home() {
   );
 
   useEffect(() => {
+    dispatch(fetchDefaultRepositoryAccess());
     dispatch(fetchRepositoryRequests({ leadEmail: user.userInfo?.workEmail }));
-  }, [dispatch, user.userInfo?.workEmail]);
+  },[dispatch, user.userInfo?.workEmail]);
 
   const roles = auth.roles;
 

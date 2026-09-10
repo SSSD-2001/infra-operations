@@ -443,6 +443,8 @@ public type RepoTeamLeadSyncResult record {|
     int addedCount;
     # Number of teams deleted
     int deletedCount;
+    # Number of teams updated
+    int updatedCount;
 |};
 
 # Row from repo_team_lead_keys.
@@ -453,4 +455,7 @@ public type RepoTeamLeadKey record {|
     # GitHub team slug
     @sql:Column {name: "team_slug"}
     string teamSlug;
+    # Team lead email
+    @sql:Column {name: "lead_email"}
+    string? leadEmail;
 |};

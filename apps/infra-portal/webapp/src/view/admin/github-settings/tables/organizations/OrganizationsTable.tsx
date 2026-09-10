@@ -54,6 +54,7 @@ import {
   syncOrganization,
   updateOrganization,
 } from "@root/src/slices/organizationsSlice/organizations";
+import { fetchRepoTeamLeads } from "@root/src/slices/repoTeamLeadsSlice/repoTeamLeads";
 import { useAppDispatch, useAppSelector } from "@root/src/slices/store";
 import { ConfirmationType, State } from "@root/src/types/types";
 
@@ -119,6 +120,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
         try {
           await dispatch(deleteOrganization(organizationId));
           dispatch(fetchOrganizations());
+          await dispatch(fetchRepoTeamLeads());
         } catch {
         }
       },
@@ -154,6 +156,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
               teamIds: values.defaultTeams || [],
             }),
           );
+          await dispatch(fetchRepoTeamLeads());
           const orgs: Organization[] = (await dispatch(fetchOrganizations()).unwrap()) ?? [];
           const syncedOrg = orgs?.find((org) => org.organizationName === values.organizationName);
           if (

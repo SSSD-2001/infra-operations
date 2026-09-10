@@ -17,7 +17,6 @@ import { Search } from "@mui/icons-material";
 import {
   Box,
   Chip,
-  IconButton,
   InputAdornment,
   TextField,
   Typography,
@@ -145,9 +144,7 @@ export default function AccessRequestList() {
             input: {
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton size="small">
-                    <Search />
-                  </IconButton>
+                  <Search fontSize="small" />
                 </InputAdornment>
               ),
             },

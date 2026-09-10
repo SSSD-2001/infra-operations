@@ -76,7 +76,7 @@ export const routes: RouteObjectWithRole[] = [
       },
       {
         path: "request-existing-repo-access",
-        text: "Request access",
+        text: "Request Access",
         icon: React.createElement(GitPullRequest),
         element: React.createElement(View.requestExistingRepoAccess),
         allowRoles: [Role.EMPLOYEE],

@@ -98,6 +98,17 @@ public type GitHubTeam record {|
     json...;
 |};
 
+# GitHub team member (list members payload).
+public type TeamMember record {|
+    # The login name of the team member
+    string login;
+    # The unique ID of the team member
+    int id;
+    # The email address of the team member
+    string? email?;
+    json...;
+|};
+
 # Record to represent the data field in the response.
 public type GitHubTeamsData record {|
     # List of GitHub teams
@@ -387,9 +398,8 @@ public type OrganizationAndTeam record {
 public type TeamRepository record {|
     # Repository name
     string name;
-    # HTML URL
-    @jsondata:Name {value: "html_url"}
-    string htmlUrl;
+    # HTML URL of the repository
+    string url;
     json...;
 |};
 

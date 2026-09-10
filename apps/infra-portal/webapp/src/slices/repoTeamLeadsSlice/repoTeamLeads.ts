@@ -96,12 +96,16 @@ export const syncRepoTeamLeads = createAsyncThunk<
         const response = await APIService.getInstance().post(AppConfig.serviceUrls.syncRepoTeamLeads);
         const addedCount: number = response.data.addedCount ?? 0;
         const deletedCount: number = response.data.deletedCount ?? 0;
+        const updatedCount: number = response.data.updatedCount ?? 0;
         const parts: string[] = [];
         if (addedCount > 0) {
-        parts.push(`${addedCount} new team${addedCount === 1 ? "" : "s"} added`);
+            parts.push(`${addedCount} new team${addedCount === 1 ? "" : "s"} added`);
         }
         if (deletedCount > 0) {
-        parts.push(`${deletedCount} team${deletedCount === 1 ? "" : "s"} deleted`);
+            parts.push(`${deletedCount} team${deletedCount === 1 ? "" : "s"} deleted`);
+        }
+        if (updatedCount > 0) {
+            parts.push(`${updatedCount} lead${updatedCount === 1 ? "" : "s"} filled`);
         }
         dispatch(
         enqueueSnackbarMessage({
@@ -110,13 +114,13 @@ export const syncRepoTeamLeads = createAsyncThunk<
         }),
         );
         return response.data;
-    } catch (error) {
-        const message = axios.isAxiosError(error)
-        ? error.response?.status === HttpStatusCode.InternalServerError
-            ? SnackMessage.error.syncRepoTeamLeadsFailedMessage
-            : String(error.response?.data?.message || error.message || "Unknown error")
-        : "An unexpected error occurred";
-        dispatch(enqueueSnackbarMessage({ message, type: "error" }));
+    }   catch (error) {
+            const message = axios.isAxiosError(error)
+            ? error.response?.status === HttpStatusCode.InternalServerError
+                ? SnackMessage.error.syncRepoTeamLeadsFailedMessage
+                : String(error.response?.data?.message || error.message || "Unknown error")
+            : "An unexpected error occurred";
+            dispatch(enqueueSnackbarMessage({ message, type: "error" }));
         return rejectWithValue(message);
     }
 });
