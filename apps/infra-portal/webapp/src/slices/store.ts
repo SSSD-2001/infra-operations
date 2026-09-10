@@ -24,8 +24,10 @@ import defaultTeamsReducer from "@slices/defaultTeamSlice/defaultTeams";
 import employeeReducer from "@slices/employeeSlice/employee";
 import githubConnectReducer from "@slices/githubOauthAppSlice/githubOauth";
 import leadsReducer from "@slices/leadsSlice/leads";
+import repoTeamLeadsReducer from "@slices/repoTeamLeadsSlice/repoTeamLeads";
 import organizationsReducer from "@slices/organizationsSlice/organizations";
 import repositoryRequestReducer from "@slices/repositoryRequestSlice/repositoryRequest";
+import accessRequestReducer from "@slices/accessRequestSlice/accessRequest";
 import securityDashboardLinksReducer from "@slices/securityDashboardLinksSlice/securityDashboardLinks";
 import teamsReducer from "@slices/teamsSlice/teams";
 import topicsReducer from "@slices/topicsSlice/topics";
@@ -43,11 +45,13 @@ export const store = configureStore({
     teams: teamsReducer,
     topics: topicsReducer,
     leads: leadsReducer,
+    repoTeamLeads: repoTeamLeadsReducer,
     organizations: organizationsReducer,
     comments: commentsReducer,
     defaultTeams: defaultTeamsReducer,
     githubConnect: githubConnectReducer,
     securityDashboardLinks: securityDashboardLinksReducer,
+    accessRequest: accessRequestReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware(),
 });

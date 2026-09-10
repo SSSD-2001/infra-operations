@@ -389,7 +389,7 @@ const RepositoryRequestSlice = createSlice({
       .addCase(approveRepositoryRequest.pending, (state) => {
         state.submitState = State.loading;
         state.functionType = "approve";
-        state.errorMessage = "Approving repositoryRequests...";
+        state.errorMessage = "Approving Repository Requests...";
       })
       .addCase(approveRepositoryRequest.fulfilled, (state) => {
         state.submitState = State.idle;

@@ -61,20 +61,20 @@ export default function GitHubServiceCard({ canReview, onNavigate }: GitHubServi
       <Box>
         <ServiceRow
           dotColor={accent}
-          label="Repository Requests"
+          label="New Repository"
           tag={{ tagName: "all", tagBackground: greenBg, tagColor: greenColor }}
           onClick={() => onNavigate("/github/repository-requests")}
         />
         <ServiceRow
           dotColor={blueColor}
-          label="Repository Access Requests"
+          label="Repository Access"
           tag={{ tagName: "all", tagBackground: greenBg, tagColor: greenColor }}
           onClick={() => onNavigate("/github/repository-access-requests")}
         />
         {canReview && (
           <ServiceRow
             dotColor={amberColor}
-            label="Review Repository Requests"
+            label="Review Requests"
             tag={{ tagName: "approver", tagBackground: amberBg, tagColor: amberColor }}
             onClick={() => onNavigate("/github/review-repository-requests")}
             isLast

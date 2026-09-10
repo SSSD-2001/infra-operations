@@ -20,40 +20,18 @@ import DefaultRepositoryAccessSection from "@view/github/components/DefaultRepos
 export default function RepositoryAccessRequests() {
   const theme = useTheme();
   return (
-    <Box sx={{ mt: 3 }}>
-      <Box
-        sx={{
-          background:
-            theme.palette.mode === "dark"
-              ? theme.palette.surface.primary.active
-              : theme.palette.neutral["white"],
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: "16px",
-          p: { xs: 2, sm: 3 },
-        }}
+    <Box>
+      <Typography
+        variant="h6"
+        sx={{ fontWeight: 600, mt: 3, color: theme.palette.customText.primary.p1.active }}
       >
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 600,
-            mb: 0.5,
-            color: theme.palette.customText.primary.p1.active,
-          }}
-        >
-          Default Repository Access
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            mb: 3,
-            color: theme.palette.customText.primary.p3.active,
-          }}
-        >
-          Organizations and repositories you are granted access by default.
-        </Typography>
-        <DefaultRepositoryAccessSection />
-        <GitHubConnect />
-      </Box>
+        Overview
+      </Typography>
+      <Typography variant="body2" sx={{ mb: 2, color: theme.palette.customText.primary.p3.active }}>
+        Organizations and repositories you granted access.
+      </Typography>
+      <DefaultRepositoryAccessSection />
+      <GitHubConnect />
     </Box>
   );
 }

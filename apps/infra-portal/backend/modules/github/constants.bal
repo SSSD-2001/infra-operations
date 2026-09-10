@@ -29,6 +29,9 @@ public const decimal RETRY_MAX_INTERVAL = 20.0;
 # Default limit for the entity.
 public const int DEFAULT_LIMIT = 100;
 
+# Default lead email assigned on the first repo-team-leads sync.
+public const string DEFAULT_REPO_TEAM_LEAD_EMAIL = "maheshika@wso2.com";
+
 # Internal committer team slug.
 const string INTERNAL_COMMITTER_TEAM_SLUG = "wso2-internal-committers";
 
