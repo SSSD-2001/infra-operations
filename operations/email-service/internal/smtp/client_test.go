@@ -16,6 +16,11 @@
 package smtpclient
 
 import (
+	"bytes"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 )
@@ -247,6 +252,97 @@ func TestBuildMIMEMessage_MixedInlineAndRegularAttachments(t *testing.T) {
 	}
 	if !strings.Contains(s, "Content-Disposition: attachment; filename=doc.pdf") {
 		t.Error("regular attachment must keep Content-Disposition: attachment")
+	}
+}
+
+// TestBuildMIMEMessage_InlineAttachmentNestedInMultipartRelated verifies the
+// actual MIME nesting an inline attachment produces, not just substring
+// presence: RFC 2387 §3 / RFC 2557 §7 only define cid: resolution for a
+// part inside the SAME multipart/related as the HTML referencing it, so
+// the HTML part and the inline image must be nested together inside a
+// multipart/related (type="text/html"), while a regular (non-inline)
+// attachment stays a sibling of that related part under the outer
+// multipart/mixed, not nested inside it.
+func TestBuildMIMEMessage_InlineAttachmentNestedInMultipartRelated(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Nested",
+		HTMLBody: `<p><img src="cid:img-1@example.com">See also the attached PDF.</p>`,
+		Attachments: []Attachment{
+			{ContentName: "img-1.png", ContentType: "image/png", Data: []byte{1, 2, 3}, Inline: true, ContentID: "img-1@example.com"},
+			{ContentName: "doc.pdf", ContentType: "application/pdf", Data: []byte{4, 5, 6}},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("parse message: %v", err)
+	}
+	mediaType, params, err := mime.ParseMediaType(m.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/mixed" {
+		t.Fatalf("top-level Content-Type = %q (err %v), want multipart/mixed", m.Header.Get("Content-Type"), err)
+	}
+
+	mixedReader := multipart.NewReader(m.Body, params["boundary"])
+
+	// First top-level part: the nested multipart/related carrying the HTML
+	// and the inline image together.
+	relatedPart, err := mixedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read related part: %v", err)
+	}
+	relatedMediaType, relatedParams, err := mime.ParseMediaType(relatedPart.Header.Get("Content-Type"))
+	if err != nil || relatedMediaType != "multipart/related" {
+		t.Fatalf("first part Content-Type = %q (err %v), want multipart/related", relatedPart.Header.Get("Content-Type"), err)
+	}
+	if relatedParams["type"] != "text/html" {
+		t.Errorf(`multipart/related type param = %q, want "text/html"`, relatedParams["type"])
+	}
+
+	relatedReader := multipart.NewReader(relatedPart, relatedParams["boundary"])
+	htmlSub, err := relatedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read html sub-part: %v", err)
+	}
+	if ct := htmlSub.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("first sub-part Content-Type = %q, want text/html", ct)
+	}
+
+	imgSub, err := relatedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read image sub-part: %v", err)
+	}
+	if disp := imgSub.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "inline") {
+		t.Errorf("image sub-part Content-Disposition = %q, want inline", disp)
+	}
+	if cid := imgSub.Header.Get("Content-ID"); cid != "<img-1@example.com>" {
+		t.Errorf("image sub-part Content-ID = %q, want <img-1@example.com>", cid)
+	}
+
+	if _, err := relatedReader.NextPart(); err != io.EOF {
+		t.Error("multipart/related must contain exactly 2 sub-parts (html + image), found a third")
+	}
+
+	// Second top-level part: the regular (non-inline) PDF attachment — a
+	// sibling of the related part, not nested inside it.
+	pdfPart, err := mixedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read pdf part: %v", err)
+	}
+	if disp := pdfPart.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "attachment") {
+		t.Errorf("pdf part Content-Disposition = %q, want attachment", disp)
+	}
+	if pdfPart.Header.Get("Content-ID") != "" {
+		t.Error("regular attachment must not carry a Content-ID")
+	}
+
+	if _, err := mixedReader.NextPart(); err != io.EOF {
+		t.Error("multipart/mixed must contain exactly 2 top-level parts (related + pdf), found a third")
 	}
 }
 

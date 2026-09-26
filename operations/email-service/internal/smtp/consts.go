@@ -55,8 +55,9 @@ const (
 	// MIME content values written by buildMIMEMessage.
 	mimeVersion            = "1.0"
 	mimeCharsetUTF8        = "UTF-8"
-	mimeTypeMultipartMixed = "multipart/mixed"
-	mimeTypeTextHTML       = "text/html"
+	mimeTypeMultipartMixed   = "multipart/mixed"
+	mimeTypeMultipartRelated = "multipart/related"
+	mimeTypeTextHTML         = "text/html"
 	mimeEncodingQP         = "quoted-printable"
 	mimeEncodingBase64     = "base64"
 

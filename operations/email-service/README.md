@@ -51,10 +51,10 @@ Sends an email with an HTML body and optional file attachments.
 
 > The HTML body is transmitted as a base64 string to avoid ambiguity when the template contains characters that clash with JSON encoding (e.g., unescaped `<`, `>`, or embedded quotes in inline scripts/styles). Callers encode the raw HTML once; this service decodes it and encodes it again as `quoted-printable` inside the MIME message, which is the standard encoding for HTML email bodies.
 
-**Inline images**: setting `inline: true` on an attachment (with a non-empty `contentId`) sends it with `Content-Disposition: inline` and a `Content-ID` header instead of a plain downloadable attachment, so the `template` HTML can reference it directly:
+**Inline images**: setting `inline: true` on an attachment (with a `contentId`) sends it with `Content-Disposition: inline` and a `Content-ID` header instead of a plain downloadable attachment, so the `template` HTML can reference it directly:
 
 ```html
-<img src="cid:pasted-image-1">
+<img src="cid:pasted-image-1@example.com">
 ```
 
 ```json
@@ -64,10 +64,14 @@ Sends an email with an HTML body and optional file attachments.
     "contentType": "image/png",
     "attachment":  "<base64-encoded PNG bytes>",
     "inline":      true,
-    "contentId":   "pasted-image-1"
+    "contentId":   "pasted-image-1@example.com"
   }]
 }
 ```
+
+`contentId` must be shaped like `local-part@domain` (RFC 2392's `addr-spec`) — a bare token (e.g. `"pasted-image-1"`, no `@`) is rejected. This value is written verbatim into the `Content-ID` header, never reshaped, so the caller must use the exact same string in both the `template`'s `cid:` reference and `contentId` — email-service has no way to know what `cid:` reference the caller already baked into its HTML, so it cannot safely substitute a different value after the fact.
+
+An inline attachment's HTML part and every inline image are nested together inside their own `multipart/related` (`type="text/html"`); a non-inline attachment on the same request stays a sibling under the outer `multipart/mixed`, not nested inside it — matching RFC 2387/RFC 2557's requirement that a `cid:` reference only be guaranteed to resolve to a part inside the same `multipart/related` as the HTML referencing it.
 
 This is the standards-compliant way to embed an image directly in an email (a real `multipart/mixed` MIME part referenced by `cid:`), unlike a `data:` URI embedded in the HTML itself — Gmail and most major webmail clients strip a `data:` image `src` from received HTML on render regardless of how correctly it's encoded, so a caller that needs an image to actually display in the recipient's inbox should always use this, never a `data:` URI in `template`.
 

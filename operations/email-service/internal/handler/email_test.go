@@ -205,6 +205,30 @@ func TestInlineAttachmentInvalidContentID(t *testing.T) {
 	assertResponse(t, rr, http.StatusBadRequest, errInvalidContentID)
 }
 
+// TestInlineAttachmentContentIDNotAddrSpecShaped tests that a bare,
+// non-addr-spec-shaped contentId (no "@") is rejected -- RFC 2392 requires
+// a Content-ID to look like local-part@domain for a cid: reference to be
+// guaranteed to resolve on a strictly conformant client.
+func TestInlineAttachmentContentIDNotAddrSpecShaped(t *testing.T) {
+	h, _ := newTestHandler(nil)
+	rr := doPost(t, h, map[string]any{
+		"to":       []string{"test@example.com"},
+		"from":     "sender@example.com",
+		"subject":  "test subject",
+		"template": base64.StdEncoding.EncodeToString([]byte("<h1>Hello</h1>")),
+		"attachments": []map[string]any{
+			{
+				"contentName": "pasted-image-1.png",
+				"contentType": "image/png",
+				"attachment":  base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
+				"inline":      true,
+				"contentId":   "pasted-image-1",
+			},
+		},
+	})
+	assertResponse(t, rr, http.StatusBadRequest, errInvalidContentID)
+}
+
 // TestInlineAttachmentHappyPath verifies a valid inline attachment reaches
 // the Mailer with Inline/ContentID carried through unchanged, alongside a
 // non-inline attachment on the same request.
@@ -214,14 +238,14 @@ func TestInlineAttachmentHappyPath(t *testing.T) {
 		"to":       []string{"test@example.com"},
 		"from":     "sender@example.com",
 		"subject":  "test subject",
-		"template": base64.StdEncoding.EncodeToString([]byte(`<img src="cid:pasted-image-1">`)),
+		"template": base64.StdEncoding.EncodeToString([]byte(`<img src="cid:pasted-image-1@example.com">`)),
 		"attachments": []map[string]any{
 			{
 				"contentName": "pasted-image-1.png",
 				"contentType": "image/png",
 				"attachment":  base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
 				"inline":      true,
-				"contentId":   "pasted-image-1",
+				"contentId":   "pasted-image-1@example.com",
 			},
 			{
 				"contentName": "doc.pdf",
@@ -238,7 +262,7 @@ func TestInlineAttachmentHappyPath(t *testing.T) {
 		t.Fatalf("expected 2 attachments to reach the Mailer, got %d", len(mock.lastMsg.Attachments))
 	}
 	inline := mock.lastMsg.Attachments[0]
-	if !inline.Inline || inline.ContentID != "pasted-image-1" {
+	if !inline.Inline || inline.ContentID != "pasted-image-1@example.com" {
 		t.Errorf("inline attachment not carried through correctly: %+v", inline)
 	}
 	regular := mock.lastMsg.Attachments[1]
