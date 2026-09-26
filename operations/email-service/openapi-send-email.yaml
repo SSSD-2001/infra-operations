@@ -71,6 +71,22 @@ components:
           format: byte
           description: The raw file bytes, encoded as a base64 string.
           example: SGVsbG8gV29ybGQh
+        inline:
+          type: boolean
+          description: >-
+            When true, this attachment is sent with Content-Disposition:
+            inline instead of attachment, so it can be referenced from the
+            HTML template as an embedded image rather than shown as a
+            downloadable file. Requires contentId.
+          default: false
+        contentId:
+          type: string
+          description: >-
+            Required when inline is true. Becomes this part's Content-ID
+            header; reference it from the HTML template's template field as
+            <img src="cid:{contentId}">. Ignored when inline is false or
+            omitted.
+          example: pasted-image-1
       required:
         - contentName
         - contentType

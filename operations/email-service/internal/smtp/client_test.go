@@ -173,6 +173,81 @@ func TestBuildMIMEMessage_WithAttachment(t *testing.T) {
 	if !strings.Contains(s, mimeEncodingBase64) {
 		t.Error("attachment must be base64 encoded")
 	}
+	if strings.Contains(strings.ToLower(s), "content-id:") {
+		t.Error("a non-inline attachment must not carry a Content-ID header")
+	}
+	if !strings.Contains(s, `Content-Disposition: attachment`) {
+		t.Error("a non-inline attachment must keep Content-Disposition: attachment")
+	}
+}
+
+// TestBuildMIMEMessage_WithInlineAttachment verifies an Inline attachment is
+// written with Content-Disposition: inline and a Content-ID header (wrapped
+// in angle brackets per RFC 2392), rather than the plain
+// Content-Disposition: attachment every non-inline attachment still gets —
+// this is the mechanism that lets the HTML body reference the same part via
+// cid:<contentId> instead of embedding it as a data: URI.
+func TestBuildMIMEMessage_WithInlineAttachment(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "With Inline Image",
+		HTMLBody: `<p><img src="cid:pasted-image-1"></p>`,
+		Attachments: []Attachment{
+			{ContentName: "pasted-image-1.png", ContentType: "image/png", Data: []byte{1, 2, 3, 4}, Inline: true, ContentID: "pasted-image-1"},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(s, "Content-Disposition: inline; filename=pasted-image-1.png") {
+		t.Error("inline attachment must be sent with Content-Disposition: inline")
+	}
+	if strings.Contains(s, "Content-Disposition: attachment") {
+		t.Error("inline attachment must not also carry Content-Disposition: attachment")
+	}
+	// The header name comes out as "Content-Id" (net/textproto's
+	// CanonicalMIMEHeaderKey capitalizes only the first letter after each
+	// hyphen) — functionally identical to "Content-ID" since MIME header
+	// names are case-insensitive (RFC 5322), so the assertion is
+	// case-insensitive rather than pinned to one specific casing.
+	if !strings.Contains(strings.ToLower(s), "content-id: <pasted-image-1>") {
+		t.Error("inline attachment must carry its Content-ID wrapped in angle brackets")
+	}
+	if !strings.Contains(s, `cid:pasted-image-1`) {
+		t.Error("HTML body's own cid: reference must survive unchanged")
+	}
+}
+
+// TestBuildMIMEMessage_MixedInlineAndRegularAttachments verifies an inline
+// image and a regular (non-inline) attachment can coexist on the same
+// message, each keeping its own disposition.
+func TestBuildMIMEMessage_MixedInlineAndRegularAttachments(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Mixed",
+		HTMLBody: `<p><img src="cid:img-1">See also the attached PDF.</p>`,
+		Attachments: []Attachment{
+			{ContentName: "img-1.png", ContentType: "image/png", Data: []byte{1, 2, 3}, Inline: true, ContentID: "img-1"},
+			{ContentName: "doc.pdf", ContentType: "application/pdf", Data: []byte{4, 5, 6}},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(strings.ToLower(s), "content-id: <img-1>") {
+		t.Error("missing inline image's Content-ID")
+	}
+	if !strings.Contains(s, "Content-Disposition: attachment; filename=doc.pdf") {
+		t.Error("regular attachment must keep Content-Disposition: attachment")
+	}
 }
 
 // TestBuildMIMEMessage_NonASCIIFilename ensures non-ASCII attachment names are handled.

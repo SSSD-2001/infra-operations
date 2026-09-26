@@ -161,6 +161,92 @@ func TestInvalidContentType(t *testing.T) {
 	assertResponse(t, rr, http.StatusBadRequest, errInvalidContentType)
 }
 
+// TestInlineAttachmentMissingContentID tests that inline: true without a
+// contentId is rejected rather than silently sent with no Content-ID.
+func TestInlineAttachmentMissingContentID(t *testing.T) {
+	h, _ := newTestHandler(nil)
+	rr := doPost(t, h, map[string]any{
+		"to":       []string{"test@example.com"},
+		"from":     "sender@example.com",
+		"subject":  "test subject",
+		"template": base64.StdEncoding.EncodeToString([]byte("<h1>Hello</h1>")),
+		"attachments": []map[string]any{
+			{
+				"contentName": "pasted-image-1.png",
+				"contentType": "image/png",
+				"attachment":  base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
+				"inline":      true,
+			},
+		},
+	})
+	assertResponse(t, rr, http.StatusBadRequest, errContentIDRequired)
+}
+
+// TestInlineAttachmentInvalidContentID tests that a contentId containing
+// CR/LF or angle brackets — which could break out of the Content-ID
+// header's own <...> framing or inject a second header — is rejected.
+func TestInlineAttachmentInvalidContentID(t *testing.T) {
+	h, _ := newTestHandler(nil)
+	rr := doPost(t, h, map[string]any{
+		"to":       []string{"test@example.com"},
+		"from":     "sender@example.com",
+		"subject":  "test subject",
+		"template": base64.StdEncoding.EncodeToString([]byte("<h1>Hello</h1>")),
+		"attachments": []map[string]any{
+			{
+				"contentName": "pasted-image-1.png",
+				"contentType": "image/png",
+				"attachment":  base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
+				"inline":      true,
+				"contentId":   "abc>\r\nX-Injected: true",
+			},
+		},
+	})
+	assertResponse(t, rr, http.StatusBadRequest, errInvalidContentID)
+}
+
+// TestInlineAttachmentHappyPath verifies a valid inline attachment reaches
+// the Mailer with Inline/ContentID carried through unchanged, alongside a
+// non-inline attachment on the same request.
+func TestInlineAttachmentHappyPath(t *testing.T) {
+	h, mock := newTestHandler(nil)
+	rr := doPost(t, h, map[string]any{
+		"to":       []string{"test@example.com"},
+		"from":     "sender@example.com",
+		"subject":  "test subject",
+		"template": base64.StdEncoding.EncodeToString([]byte(`<img src="cid:pasted-image-1">`)),
+		"attachments": []map[string]any{
+			{
+				"contentName": "pasted-image-1.png",
+				"contentType": "image/png",
+				"attachment":  base64.StdEncoding.EncodeToString([]byte{1, 2, 3}),
+				"inline":      true,
+				"contentId":   "pasted-image-1",
+			},
+			{
+				"contentName": "doc.pdf",
+				"contentType": "application/pdf",
+				"attachment":  base64.StdEncoding.EncodeToString([]byte{4, 5, 6}),
+			},
+		},
+	})
+	assertResponse(t, rr, http.StatusOK, msgEmailSentSuccess)
+
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	if len(mock.lastMsg.Attachments) != 2 {
+		t.Fatalf("expected 2 attachments to reach the Mailer, got %d", len(mock.lastMsg.Attachments))
+	}
+	inline := mock.lastMsg.Attachments[0]
+	if !inline.Inline || inline.ContentID != "pasted-image-1" {
+		t.Errorf("inline attachment not carried through correctly: %+v", inline)
+	}
+	regular := mock.lastMsg.Attachments[1]
+	if regular.Inline || regular.ContentID != "" {
+		t.Errorf("non-inline attachment must not pick up Inline/ContentID: %+v", regular)
+	}
+}
+
 // TestInvalidBody tests that a malformed JSON body returns 400.
 func TestInvalidBody(t *testing.T) {
 	h, _ := newTestHandler(nil)

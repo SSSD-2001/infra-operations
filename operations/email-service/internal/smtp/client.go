@@ -40,11 +40,18 @@ import (
 // internal trie on every sanitizeHeader call.
 var headerSanitizer = strings.NewReplacer("\r", "", "\n", "")
 
-// Attachment represents a file attached to an email.
+// Attachment represents a file attached to an email. Inline and ContentID
+// are optional; when Inline is true (ContentID must be non-empty, enforced
+// by the handler before this type is ever constructed) buildMIMEMessage
+// writes this part as Content-Disposition: inline with a Content-ID header
+// instead of a plain Content-Disposition: attachment, so the HTML body can
+// reference it via cid: rather than embedding it as a data: URI.
 type Attachment struct {
 	ContentName string
 	ContentType string
 	Data        []byte
+	Inline      bool
+	ContentID   string
 }
 
 // Message encapsulates the email data to be sent.
@@ -412,11 +419,25 @@ func buildMIMEMessage(msg *Message) ([]byte, error) {
 		}
 		attHeader.Set(headerContentType, contentType)
 		attHeader.Set(headerContentTransferEncoding, mimeEncodingBase64)
-		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": att.ContentName})
+		dispositionType := dispositionAttachment
+		if att.Inline {
+			dispositionType = dispositionInline
+		}
+		disposition := mime.FormatMediaType(dispositionType, map[string]string{"filename": att.ContentName})
 		if disposition == "" {
 			return nil, fmt.Errorf(errFmtContentDisp, att.ContentName)
 		}
 		attHeader.Set(headerContentDisposition, disposition)
+		// Inline parts get a Content-ID so the HTML body (a sibling part in
+		// this same multipart/mixed tree) can reference this exact part via
+		// cid:<contentId> -- angle brackets are the Content-ID header's own
+		// wire delimiters (RFC 2392), not part of the id itself, and
+		// sanitizeHeader strips any CR/LF the caller's contentId might carry
+		// (the handler also rejects one containing '<'/'>' before this point,
+		// so this is defense in depth, not the only guard).
+		if att.Inline {
+			attHeader.Set(headerContentID, "<"+sanitizeHeader(att.ContentID)+">")
+		}
 
 		attPart, err := mixedWriter.CreatePart(attHeader)
 		if err != nil {

@@ -34,6 +34,8 @@ const (
 	errInvalidReplyTo     = "invalid 'replyTo' address"
 	errSubjectRequired    = "'subject' is required"
 	errInvalidContentType = "unsupported attachment content type"
+	errContentIDRequired  = "'contentId' is required when 'inline' is true"
+	errInvalidContentID   = "invalid 'contentId'"
 
 	// Email send outcomes.
 	errEmailSend        = "failed to send email"

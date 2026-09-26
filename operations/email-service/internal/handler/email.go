@@ -141,10 +141,23 @@ func (h *EmailHandler) SendEmail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if att.Inline {
+			if strings.TrimSpace(att.ContentID) == "" {
+				writeJSON(w, http.StatusBadRequest, ResponseMessage{Message: errContentIDRequired})
+				return
+			}
+			if strings.ContainsAny(att.ContentID, "\r\n<>") {
+				writeJSON(w, http.StatusBadRequest, ResponseMessage{Message: errInvalidContentID})
+				return
+			}
+		}
+
 		outMsg.Attachments = append(outMsg.Attachments, smtpclient.Attachment{
 			ContentName: att.ContentName,
 			ContentType: att.ContentType,
 			Data:        att.Attachment,
+			Inline:      att.Inline,
+			ContentID:   att.ContentID,
 		})
 	}
 

@@ -42,12 +42,34 @@ Sends an email with an HTML body and optional file attachments.
   "attachments": [{                             // optional
     "contentName": "file.pdf",
     "contentType": "application/pdf",
-    "attachment":  "<base64-encoded bytes>"
+    "attachment":  "<base64-encoded bytes>",
+    "inline":      false,                       // optional, default false
+    "contentId":   ""                           // required when inline is true
   }]
 }
 ```
 
 > The HTML body is transmitted as a base64 string to avoid ambiguity when the template contains characters that clash with JSON encoding (e.g., unescaped `<`, `>`, or embedded quotes in inline scripts/styles). Callers encode the raw HTML once; this service decodes it and encodes it again as `quoted-printable` inside the MIME message, which is the standard encoding for HTML email bodies.
+
+**Inline images**: setting `inline: true` on an attachment (with a non-empty `contentId`) sends it with `Content-Disposition: inline` and a `Content-ID` header instead of a plain downloadable attachment, so the `template` HTML can reference it directly:
+
+```html
+<img src="cid:pasted-image-1">
+```
+
+```json
+{
+  "attachments": [{
+    "contentName": "pasted-image-1.png",
+    "contentType": "image/png",
+    "attachment":  "<base64-encoded PNG bytes>",
+    "inline":      true,
+    "contentId":   "pasted-image-1"
+  }]
+}
+```
+
+This is the standards-compliant way to embed an image directly in an email (a real `multipart/mixed` MIME part referenced by `cid:`), unlike a `data:` URI embedded in the HTML itself — Gmail and most major webmail clients strip a `data:` image `src` from received HTML on render regardless of how correctly it's encoded, so a caller that needs an image to actually display in the recipient's inbox should always use this, never a `data:` URI in `template`.
 
 **Responses**
 

@@ -72,6 +72,11 @@ const (
 	headerContentType             = "Content-Type"
 	headerContentTransferEncoding = "Content-Transfer-Encoding"
 	headerContentDisposition      = "Content-Disposition"
+	headerContentID               = "Content-ID"
+
+	// Content-Disposition types.
+	dispositionAttachment = "attachment"
+	dispositionInline     = "inline"
 
 	// crlf is the MIME line terminator per RFC 5322.
 	crlf = "\r\n"
