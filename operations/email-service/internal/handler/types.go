@@ -15,11 +15,22 @@
 // under the License.
 package handler
 
-// EmailAttachment represents a file to attach to an email.
+// EmailAttachment represents a file to attach to an email. Inline and
+// ContentID are optional; omitting both keeps the attachment behaving
+// exactly as before this pair was added -- a plain Content-Disposition:
+// attachment part, unrelated to the HTML body. Setting Inline: true marks
+// the part Content-Disposition: inline instead, and ContentID (required
+// when Inline is true, validated in the handler) becomes that part's
+// Content-ID header, so the HTML template can reference the same file as
+// <img src="cid:<contentId>"> rather than embedding it as a data: URI --
+// which most webmail clients (Gmail included) strip from received HTML on
+// render, regardless of how it's encoded.
 type EmailAttachment struct {
 	ContentName string `json:"contentName"`
 	ContentType string `json:"contentType"`
 	Attachment  []byte `json:"attachment"`
+	Inline      bool   `json:"inline,omitempty"`
+	ContentID   string `json:"contentId,omitempty"`
 }
 
 // EmailRequest is the JSON body accepted by POST /send-email.

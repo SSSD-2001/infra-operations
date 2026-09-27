@@ -40,11 +40,18 @@ import (
 // internal trie on every sanitizeHeader call.
 var headerSanitizer = strings.NewReplacer("\r", "", "\n", "")
 
-// Attachment represents a file attached to an email.
+// Attachment represents a file attached to an email. Inline and ContentID
+// are optional; when Inline is true (ContentID must be non-empty, enforced
+// by the handler before this type is ever constructed) buildMIMEMessage
+// writes this part as Content-Disposition: inline with a Content-ID header
+// instead of a plain Content-Disposition: attachment, so the HTML body can
+// reference it via cid: rather than embedding it as a data: URI.
 type Attachment struct {
 	ContentName string
 	ContentType string
 	Data        []byte
+	Inline      bool
+	ContentID   string
 }
 
 // Message encapsulates the email data to be sent.
@@ -384,66 +391,151 @@ func buildMIMEMessage(msg *Message) ([]byte, error) {
 	// Blank line separates headers from body.
 	buf.WriteString(crlf)
 
-	htmlPartHeader := textproto.MIMEHeader{}
-	htmlPartHeader.Set(headerContentType, mimeTypeTextHTML+`; charset="`+mimeCharsetUTF8+`"`)
-	htmlPartHeader.Set(headerContentTransferEncoding, mimeEncodingQP)
-
-	htmlPart, err := mixedWriter.CreatePart(htmlPartHeader)
-	if err != nil {
-		return nil, err
-	}
-	qpWriter := quotedprintable.NewWriter(htmlPart)
-	if _, err = qpWriter.Write([]byte(msg.HTMLBody)); err != nil {
-		return nil, err
-	}
-	if err = qpWriter.Close(); err != nil {
-		return nil, err
-	}
-
+	var inlineAtts, regularAtts []Attachment
 	for _, att := range msg.Attachments {
-		attHeader := textproto.MIMEHeader{}
-		mediatype, params, err := mime.ParseMediaType(att.ContentType)
-		if err != nil {
-			return nil, fmt.Errorf(errFmtInvalidAttachType, att.ContentType)
+		if att.Inline {
+			inlineAtts = append(inlineAtts, att)
+		} else {
+			regularAtts = append(regularAtts, att)
 		}
-		contentType := mime.FormatMediaType(mediatype, params)
-		if contentType == "" {
-			return nil, fmt.Errorf(errFmtInvalidAttachType, att.ContentType)
-		}
-		attHeader.Set(headerContentType, contentType)
-		attHeader.Set(headerContentTransferEncoding, mimeEncodingBase64)
-		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": att.ContentName})
-		if disposition == "" {
-			return nil, fmt.Errorf(errFmtContentDisp, att.ContentName)
-		}
-		attHeader.Set(headerContentDisposition, disposition)
+	}
 
-		attPart, err := mixedWriter.CreatePart(attHeader)
-		if err != nil {
+	if len(inlineAtts) == 0 {
+		// No inline part references the HTML body via cid:, so it stays a
+		// plain sibling of every attachment — the flat structure this
+		// function has always used, unchanged.
+		if err := writeHTMLPart(mixedWriter, msg.HTMLBody); err != nil {
+			return nil, err
+		}
+	} else {
+		// At least one inline part: RFC 2387 §3 / RFC 2557 §7 only define
+		// cid: resolution for a part inside the SAME multipart/related as
+		// the HTML referencing it — a bare sibling under multipart/mixed
+		// isn't a target a strictly-conformant client is required to
+		// resolve (most real-world clients, Gmail included, are lenient
+		// about this too, but the correct nesting costs only a small,
+		// localized change, so there's no reason to rely on that leniency).
+		// Build the HTML part and every inline attachment inside their own
+		// multipart/related first, in a scratch buffer, then embed that
+		// whole sub-message as a single part of the outer multipart/mixed.
+		// Any non-inline attachment stays a sibling of that related part,
+		// not nested inside it.
+		var relatedBuf bytes.Buffer
+		relatedWriter := multipart.NewWriter(&relatedBuf)
+		if err := writeHTMLPart(relatedWriter, msg.HTMLBody); err != nil {
+			return nil, err
+		}
+		for _, att := range inlineAtts {
+			if err := writeAttachmentPart(relatedWriter, att); err != nil {
+				return nil, err
+			}
+		}
+		if err := relatedWriter.Close(); err != nil {
 			return nil, err
 		}
 
-		lw := &lineWrapper{w: attPart, lineLen: 76}
-		enc := base64.NewEncoder(base64.StdEncoding, lw)
-		if _, err = enc.Write(att.Data); err != nil {
-			return nil, fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
+		relatedHeader := textproto.MIMEHeader{}
+		relatedHeader.Set(headerContentType, fmt.Sprintf(`%s; type="%s"; boundary="%s"`, mimeTypeMultipartRelated, mimeTypeTextHTML, relatedWriter.Boundary()))
+		relatedPart, err := mixedWriter.CreatePart(relatedHeader)
+		if err != nil {
+			return nil, err
 		}
-		if err = enc.Close(); err != nil {
-			return nil, fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
-		}
-		// Terminate the final (potentially partial) line.
-		if lw.col > 0 {
-			if _, err = attPart.Write([]byte(crlf)); err != nil {
-				return nil, fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
-			}
+		if _, err := relatedPart.Write(relatedBuf.Bytes()); err != nil {
+			return nil, err
 		}
 	}
 
-	if err = mixedWriter.Close(); err != nil {
+	for _, att := range regularAtts {
+		if err := writeAttachmentPart(mixedWriter, att); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := mixedWriter.Close(); err != nil {
 		return nil, err
 	}
 
 	return buf.Bytes(), nil
+}
+
+// writeHTMLPart writes htmlBody as a text/html, quoted-printable part of w.
+func writeHTMLPart(w *multipart.Writer, htmlBody string) error {
+	htmlPartHeader := textproto.MIMEHeader{}
+	htmlPartHeader.Set(headerContentType, mimeTypeTextHTML+`; charset="`+mimeCharsetUTF8+`"`)
+	htmlPartHeader.Set(headerContentTransferEncoding, mimeEncodingQP)
+
+	htmlPart, err := w.CreatePart(htmlPartHeader)
+	if err != nil {
+		return err
+	}
+	qpWriter := quotedprintable.NewWriter(htmlPart)
+	if _, err := qpWriter.Write([]byte(htmlBody)); err != nil {
+		return err
+	}
+	return qpWriter.Close()
+}
+
+// writeAttachmentPart writes att as a base64-encoded part of w, with
+// Content-Disposition: inline + a Content-ID when att.Inline is set,
+// Content-Disposition: attachment otherwise.
+func writeAttachmentPart(w *multipart.Writer, att Attachment) error {
+	attHeader := textproto.MIMEHeader{}
+	mediatype, params, err := mime.ParseMediaType(att.ContentType)
+	if err != nil {
+		return fmt.Errorf(errFmtInvalidAttachType, att.ContentType)
+	}
+	contentType := mime.FormatMediaType(mediatype, params)
+	if contentType == "" {
+		return fmt.Errorf(errFmtInvalidAttachType, att.ContentType)
+	}
+	attHeader.Set(headerContentType, contentType)
+	attHeader.Set(headerContentTransferEncoding, mimeEncodingBase64)
+	dispositionType := dispositionAttachment
+	if att.Inline {
+		dispositionType = dispositionInline
+	}
+	disposition := mime.FormatMediaType(dispositionType, map[string]string{"filename": att.ContentName})
+	if disposition == "" {
+		return fmt.Errorf(errFmtContentDisp, att.ContentName)
+	}
+	attHeader.Set(headerContentDisposition, disposition)
+	// Inline parts get a Content-ID so the HTML body (inside the same
+	// multipart/related — see buildMIMEMessage) can reference this exact
+	// part via cid:<contentId>. Used verbatim, never transformed: the
+	// caller already baked this exact contentId into its own HTML as
+	// cid:<contentId> before this request was ever sent, so rewriting it
+	// here (e.g. to append a domain) would desync the two — the handler's
+	// own validation is what requires this to already be RFC
+	// 2392-addr-spec-shaped (see errInvalidContentID), not this function.
+	// Angle brackets are the Content-ID header's own wire delimiters (RFC
+	// 2392), not part of the id itself; sanitizeHeader strips any CR/LF the
+	// caller's contentId might carry (the handler also rejects one
+	// containing '<'/'>' before this point, so this is defense in depth,
+	// not the only guard).
+	if att.Inline {
+		attHeader.Set(headerContentID, "<"+sanitizeHeader(att.ContentID)+">")
+	}
+
+	attPart, err := w.CreatePart(attHeader)
+	if err != nil {
+		return err
+	}
+
+	lw := &lineWrapper{w: attPart, lineLen: 76}
+	enc := base64.NewEncoder(base64.StdEncoding, lw)
+	if _, err = enc.Write(att.Data); err != nil {
+		return fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
+	}
+	if err = enc.Close(); err != nil {
+		return fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
+	}
+	// Terminate the final (potentially partial) line.
+	if lw.col > 0 {
+		if _, err = attPart.Write([]byte(crlf)); err != nil {
+			return fmt.Errorf(errFmtWriteAttachment, att.ContentName, err)
+		}
+	}
+	return nil
 }
 
 // ValidateMIMEType returns an error if contentType is not a valid MIME type.

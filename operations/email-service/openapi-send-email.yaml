@@ -71,6 +71,25 @@ components:
           format: byte
           description: The raw file bytes, encoded as a base64 string.
           example: SGVsbG8gV29ybGQh
+        inline:
+          type: boolean
+          description: >-
+            When true, this attachment is sent with Content-Disposition:
+            inline instead of attachment, so it can be referenced from the
+            HTML template as an embedded image rather than shown as a
+            downloadable file. Requires contentId.
+          default: false
+        contentId:
+          type: string
+          description: >-
+            Required when inline is true, and must be shaped like
+            local-part@domain (RFC 2392's addr-spec) -- a bare token with
+            no "@" is rejected. Becomes this part's Content-ID header
+            verbatim, never reshaped; reference the exact same value from
+            the HTML template's template field as
+            <img src="cid:{contentId}">. Ignored when inline is false or
+            omitted.
+          example: pasted-image-1@example.com
       required:
         - contentName
         - contentType

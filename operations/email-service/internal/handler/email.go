@@ -141,10 +141,23 @@ func (h *EmailHandler) SendEmail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if att.Inline {
+			if strings.TrimSpace(att.ContentID) == "" {
+				writeJSON(w, http.StatusBadRequest, ResponseMessage{Message: errContentIDRequired})
+				return
+			}
+			if strings.ContainsAny(att.ContentID, "\r\n<>") || !isAddrSpecShaped(att.ContentID) {
+				writeJSON(w, http.StatusBadRequest, ResponseMessage{Message: errInvalidContentID})
+				return
+			}
+		}
+
 		outMsg.Attachments = append(outMsg.Attachments, smtpclient.Attachment{
 			ContentName: att.ContentName,
 			ContentType: att.ContentType,
 			Data:        att.Attachment,
+			Inline:      att.Inline,
+			ContentID:   att.ContentID,
 		})
 	}
 
@@ -181,4 +194,23 @@ func validateAddress(addr string) error {
 	}
 	_, err := mail.ParseAddress(addr)
 	return err
+}
+
+// isAddrSpecShaped reports whether id looks like RFC 2392's required
+// addr-spec (local-part@domain) for a Content-ID -- a bare token (e.g.
+// "pasted-image-1") is not guaranteed to resolve via cid: on a strictly
+// RFC-conformant client, even though most real-world clients (Gmail
+// included) are lenient about it. Deliberately permissive beyond requiring
+// the "@" split with non-empty parts on both sides -- this isn't
+// validating a real email address (mail.ParseAddress would reject a
+// syntactically-fine local part that just isn't a deliverable mailbox),
+// just requiring the one structural piece RFC 2392 actually cares about.
+// smtp.buildMIMEMessage writes this value verbatim into the Content-ID
+// header -- it must be rejected here, not silently reshaped there, since
+// the caller has already baked this exact contentId into its own HTML as
+// cid:<contentId> before this request is even sent; transforming it after
+// the fact would desync the two.
+func isAddrSpecShaped(id string) bool {
+	at := strings.LastIndexByte(id, '@')
+	return at > 0 && at < len(id)-1
 }

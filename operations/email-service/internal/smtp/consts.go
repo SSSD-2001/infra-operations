@@ -55,8 +55,9 @@ const (
 	// MIME content values written by buildMIMEMessage.
 	mimeVersion            = "1.0"
 	mimeCharsetUTF8        = "UTF-8"
-	mimeTypeMultipartMixed = "multipart/mixed"
-	mimeTypeTextHTML       = "text/html"
+	mimeTypeMultipartMixed   = "multipart/mixed"
+	mimeTypeMultipartRelated = "multipart/related"
+	mimeTypeTextHTML         = "text/html"
 	mimeEncodingQP         = "quoted-printable"
 	mimeEncodingBase64     = "base64"
 
@@ -72,6 +73,11 @@ const (
 	headerContentType             = "Content-Type"
 	headerContentTransferEncoding = "Content-Transfer-Encoding"
 	headerContentDisposition      = "Content-Disposition"
+	headerContentID               = "Content-ID"
+
+	// Content-Disposition types.
+	dispositionAttachment = "attachment"
+	dispositionInline     = "inline"
 
 	// crlf is the MIME line terminator per RFC 5322.
 	crlf = "\r\n"
