@@ -1,0 +1,3 @@
+add your generated ssl certificate  files here to handling the https traffic on data-analyzer docker container.
+* server.crt
+* server.kry

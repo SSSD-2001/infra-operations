@@ -50,3 +50,11 @@ package-lock.json
 .classpath
 .project
 .settings
+
+#.env
+.env
+# Configs and Environment files
+.DS_Store
+target
+Config.toml
+>>>>>>> upstream/main

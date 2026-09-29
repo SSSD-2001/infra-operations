@@ -1,0 +1,534 @@
+// Copyright (c) 2026 WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+package smtpclient
+
+import (
+	"bytes"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
+	"strings"
+	"testing"
+)
+
+// TestNew_DefaultPort verifies that the SMTP client defaults to port 587.
+func TestNew_DefaultPort(t *testing.T) {
+	c := New(Config{Hostname: "smtp.example.com", Username: "user", Password: "pass"})
+	if c.cfg.Port != PortSTARTTLS {
+		t.Errorf("expected default port %s, got %q", PortSTARTTLS, c.cfg.Port)
+	}
+}
+
+// TestNew_CustomPort verifies that custom SMTP ports are correctly set.
+func TestNew_CustomPort(t *testing.T) {
+	c := New(Config{Hostname: "smtp.example.com", Port: "465"})
+	if c.cfg.Port != "465" {
+		t.Errorf("expected port 465, got %q", c.cfg.Port)
+	}
+}
+
+// TestValidateMIMEType ensures that only properly formatted MIME types are accepted.
+func TestValidateMIMEType(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantErr     bool
+	}{
+		{"valid pdf", "application/pdf", false},
+		{"valid html with params", "text/html; charset=utf-8", false},
+		{"valid octet-stream", "application/octet-stream", false},
+		{"valid jpeg", "image/jpeg", false},
+		{"valid plain text", "text/plain", false},
+		{"missing slash — bare word", "applicationpdf", true},
+		{"type without subtype", "application", true},
+		{"type with trailing slash", "image/", true},
+		{"subtype with leading slash", "/jpeg", true},
+		{"multiple slashes", "application/pdf/extra", true},
+		{"dot separator instead of slash", "application.pdf", true},
+		{"empty string", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMIMEType(tt.contentType)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateMIMEType(%q) error = %v, wantErr %v", tt.contentType, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestBuildMIMEMessage_HTMLOnly tests MIME generation for a simple HTML email.
+func TestBuildMIMEMessage_HTMLOnly(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Test Subject",
+		HTMLBody: "<h1>Hello</h1>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	for _, want := range []string{
+		"MIME-Version: " + mimeVersion,
+		"From: sender@example.com",
+		"To: to@example.com",
+		mimeTypeTextHTML,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("output missing %q", want)
+		}
+	}
+}
+
+// TestBuildMIMEMessage_CCAndReplyTo ensures CC and Reply-To headers are correctly included.
+func TestBuildMIMEMessage_CCAndReplyTo(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		CC:       []string{"cc@example.com"},
+		ReplyTo:  []string{"reply@example.com"},
+		From:     "sender@example.com",
+		Subject:  "CC Test",
+		HTMLBody: "<p>Hello</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(s, headerCC+": cc@example.com") {
+		t.Error("missing Cc header")
+	}
+	if !strings.Contains(s, headerReplyTo+": reply@example.com") {
+		t.Error("missing Reply-To header")
+	}
+}
+
+// TestBuildMIMEMessage_NoCCOrReplyTo ensures optional headers are absent when empty.
+func TestBuildMIMEMessage_NoCCOrReplyTo(t *testing.T) {
+	// Cc and Reply-To headers must be absent when the fields are empty.
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "No CC",
+		HTMLBody: "<p>body</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if strings.Contains(s, crlf+headerCC+":") {
+		t.Error("Cc header should not be present when CC is empty")
+	}
+	if strings.Contains(s, crlf+headerReplyTo+":") {
+		t.Error("Reply-To header should not be present when ReplyTo is empty")
+	}
+}
+
+// TestBuildMIMEMessage_WithAttachment validates MIME structure for emails with attachments.
+func TestBuildMIMEMessage_WithAttachment(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "With Attachment",
+		HTMLBody: "<p>See attached</p>",
+		Attachments: []Attachment{
+			{ContentName: "doc.pdf", ContentType: "application/pdf", Data: []byte{1, 2, 3, 4, 5}},
+			{ContentName: "note.txt", ContentType: "text/plain; charset=utf-8", Data: []byte("hello world")},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(s, "application/pdf") {
+		t.Error("missing application/pdf attachment")
+	}
+	if !strings.Contains(s, "text/plain; charset=utf-8") {
+		t.Error("missing text/plain; charset=utf-8 attachment")
+	}
+	if !strings.Contains(s, "doc.pdf") {
+		t.Error("missing doc.pdf filename")
+	}
+	if !strings.Contains(s, "note.txt") {
+		t.Error("missing note.txt filename")
+	}
+	if !strings.Contains(s, mimeEncodingBase64) {
+		t.Error("attachment must be base64 encoded")
+	}
+	if strings.Contains(strings.ToLower(s), "content-id:") {
+		t.Error("a non-inline attachment must not carry a Content-ID header")
+	}
+	if !strings.Contains(s, `Content-Disposition: attachment`) {
+		t.Error("a non-inline attachment must keep Content-Disposition: attachment")
+	}
+}
+
+// TestBuildMIMEMessage_WithInlineAttachment verifies an Inline attachment is
+// written with Content-Disposition: inline and a Content-ID header (wrapped
+// in angle brackets per RFC 2392), rather than the plain
+// Content-Disposition: attachment every non-inline attachment still gets —
+// this is the mechanism that lets the HTML body reference the same part via
+// cid:<contentId> instead of embedding it as a data: URI.
+func TestBuildMIMEMessage_WithInlineAttachment(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "With Inline Image",
+		HTMLBody: `<p><img src="cid:pasted-image-1"></p>`,
+		Attachments: []Attachment{
+			{ContentName: "pasted-image-1.png", ContentType: "image/png", Data: []byte{1, 2, 3, 4}, Inline: true, ContentID: "pasted-image-1"},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(s, "Content-Disposition: inline; filename=pasted-image-1.png") {
+		t.Error("inline attachment must be sent with Content-Disposition: inline")
+	}
+	if strings.Contains(s, "Content-Disposition: attachment") {
+		t.Error("inline attachment must not also carry Content-Disposition: attachment")
+	}
+	// The header name comes out as "Content-Id" (net/textproto's
+	// CanonicalMIMEHeaderKey capitalizes only the first letter after each
+	// hyphen) — functionally identical to "Content-ID" since MIME header
+	// names are case-insensitive (RFC 5322), so the assertion is
+	// case-insensitive rather than pinned to one specific casing.
+	if !strings.Contains(strings.ToLower(s), "content-id: <pasted-image-1>") {
+		t.Error("inline attachment must carry its Content-ID wrapped in angle brackets")
+	}
+	if !strings.Contains(s, `cid:pasted-image-1`) {
+		t.Error("HTML body's own cid: reference must survive unchanged")
+	}
+}
+
+// TestBuildMIMEMessage_MixedInlineAndRegularAttachments verifies an inline
+// image and a regular (non-inline) attachment can coexist on the same
+// message, each keeping its own disposition.
+func TestBuildMIMEMessage_MixedInlineAndRegularAttachments(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Mixed",
+		HTMLBody: `<p><img src="cid:img-1">See also the attached PDF.</p>`,
+		Attachments: []Attachment{
+			{ContentName: "img-1.png", ContentType: "image/png", Data: []byte{1, 2, 3}, Inline: true, ContentID: "img-1"},
+			{ContentName: "doc.pdf", ContentType: "application/pdf", Data: []byte{4, 5, 6}},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(strings.ToLower(s), "content-id: <img-1>") {
+		t.Error("missing inline image's Content-ID")
+	}
+	if !strings.Contains(s, "Content-Disposition: attachment; filename=doc.pdf") {
+		t.Error("regular attachment must keep Content-Disposition: attachment")
+	}
+}
+
+// TestBuildMIMEMessage_InlineAttachmentNestedInMultipartRelated verifies the
+// actual MIME nesting an inline attachment produces, not just substring
+// presence: RFC 2387 §3 / RFC 2557 §7 only define cid: resolution for a
+// part inside the SAME multipart/related as the HTML referencing it, so
+// the HTML part and the inline image must be nested together inside a
+// multipart/related (type="text/html"), while a regular (non-inline)
+// attachment stays a sibling of that related part under the outer
+// multipart/mixed, not nested inside it.
+func TestBuildMIMEMessage_InlineAttachmentNestedInMultipartRelated(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Nested",
+		HTMLBody: `<p><img src="cid:img-1@example.com">See also the attached PDF.</p>`,
+		Attachments: []Attachment{
+			{ContentName: "img-1.png", ContentType: "image/png", Data: []byte{1, 2, 3}, Inline: true, ContentID: "img-1@example.com"},
+			{ContentName: "doc.pdf", ContentType: "application/pdf", Data: []byte{4, 5, 6}},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	m, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("parse message: %v", err)
+	}
+	mediaType, params, err := mime.ParseMediaType(m.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/mixed" {
+		t.Fatalf("top-level Content-Type = %q (err %v), want multipart/mixed", m.Header.Get("Content-Type"), err)
+	}
+
+	mixedReader := multipart.NewReader(m.Body, params["boundary"])
+
+	// First top-level part: the nested multipart/related carrying the HTML
+	// and the inline image together.
+	relatedPart, err := mixedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read related part: %v", err)
+	}
+	relatedMediaType, relatedParams, err := mime.ParseMediaType(relatedPart.Header.Get("Content-Type"))
+	if err != nil || relatedMediaType != "multipart/related" {
+		t.Fatalf("first part Content-Type = %q (err %v), want multipart/related", relatedPart.Header.Get("Content-Type"), err)
+	}
+	if relatedParams["type"] != "text/html" {
+		t.Errorf(`multipart/related type param = %q, want "text/html"`, relatedParams["type"])
+	}
+
+	relatedReader := multipart.NewReader(relatedPart, relatedParams["boundary"])
+	htmlSub, err := relatedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read html sub-part: %v", err)
+	}
+	if ct := htmlSub.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("first sub-part Content-Type = %q, want text/html", ct)
+	}
+
+	imgSub, err := relatedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read image sub-part: %v", err)
+	}
+	if disp := imgSub.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "inline") {
+		t.Errorf("image sub-part Content-Disposition = %q, want inline", disp)
+	}
+	if cid := imgSub.Header.Get("Content-ID"); cid != "<img-1@example.com>" {
+		t.Errorf("image sub-part Content-ID = %q, want <img-1@example.com>", cid)
+	}
+
+	if _, err := relatedReader.NextPart(); err != io.EOF {
+		t.Error("multipart/related must contain exactly 2 sub-parts (html + image), found a third")
+	}
+
+	// Second top-level part: the regular (non-inline) PDF attachment — a
+	// sibling of the related part, not nested inside it.
+	pdfPart, err := mixedReader.NextPart()
+	if err != nil {
+		t.Fatalf("read pdf part: %v", err)
+	}
+	if disp := pdfPart.Header.Get("Content-Disposition"); !strings.HasPrefix(disp, "attachment") {
+		t.Errorf("pdf part Content-Disposition = %q, want attachment", disp)
+	}
+	if pdfPart.Header.Get("Content-ID") != "" {
+		t.Error("regular attachment must not carry a Content-ID")
+	}
+
+	if _, err := mixedReader.NextPart(); err != io.EOF {
+		t.Error("multipart/mixed must contain exactly 2 top-level parts (related + pdf), found a third")
+	}
+}
+
+// TestBuildMIMEMessage_NonASCIIFilename ensures non-ASCII attachment names are handled.
+func TestBuildMIMEMessage_NonASCIIFilename(t *testing.T) {
+	// Non-ASCII filenames must be encoded rather than causing an error.
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Résumé",
+		HTMLBody: "<p>See attached</p>",
+		Attachments: []Attachment{
+			{ContentName: "résumé.pdf", ContentType: "application/pdf", Data: []byte("data")},
+		},
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error for non-ASCII filename: %v", err)
+	}
+	s := string(raw)
+	// RFC-2231 encoding for the filename in Content-Disposition.
+	want := "filename*=utf-8''r%C3%A9sum%C3%A9.pdf"
+	if !strings.Contains(s, want) {
+		t.Errorf("expected RFC-2231 encoded filename %q in output, but not found", want)
+	}
+}
+
+// TestBuildMIMEMessage_SubjectQEncoded ensures non-ASCII subjects are RFC-2047 encoded.
+func TestBuildMIMEMessage_SubjectQEncoded(t *testing.T) {
+	// Non-ASCII subjects must be Q-encoded per RFC 2047.
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "こんにちは",
+		HTMLBody: "<p>Hello</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	// Q-encoded subjects begin with =?<charset>?
+	if !strings.Contains(s, "=?"+mimeCharsetUTF8+"?") {
+		t.Error("non-ASCII subject should be Q-encoded")
+	}
+}
+
+// TestBuildMIMEMessage_MultipleRecipients ensures the To header is correctly comma-separated.
+func TestBuildMIMEMessage_MultipleRecipients(t *testing.T) {
+	msg := &Message{
+		To:       []string{"a@example.com", "b@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Multi",
+		HTMLBody: "<p>Hi</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+
+	if !strings.Contains(s, "a@example.com, b@example.com") {
+		t.Error("multiple To recipients should be comma-separated")
+	}
+}
+
+// TestBuildMIMEMessage_InvalidAttachment verifies that malformed attachment headers return errors.
+func TestBuildMIMEMessage_InvalidAttachment(t *testing.T) {
+	tests := []struct {
+		name    string
+		att     Attachment
+		wantErr string
+	}{
+		{
+			name:    "invalid content type (multiple slashes)",
+			att:     Attachment{ContentType: "application/pdf/extra", ContentName: "test.pdf", Data: []byte("data")},
+			wantErr: "invalid attachment content type",
+		},
+		{
+			name:    "invalid content type (invalid characters)",
+			att:     Attachment{ContentType: "application / pdf", ContentName: "test.pdf", Data: []byte("data")},
+			wantErr: "invalid attachment content type",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &Message{
+				To:          []string{"to@example.com"},
+				From:        "sender@example.com",
+				Subject:     "Test",
+				HTMLBody:    "<p>test</p>",
+				Attachments: []Attachment{tt.att},
+			}
+			_, err := buildMIMEMessage(msg)
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("expected error containing %q, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
+// TestBuildMIMEMessage_MessageIDPresent verifies that a Message-ID header is always emitted.
+func TestBuildMIMEMessage_MessageIDPresent(t *testing.T) {
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  "Test",
+		HTMLBody: "<p>Hello</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s := string(raw)
+	if !strings.Contains(s, "Message-ID:") {
+		t.Error("output must contain a Message-ID header")
+	}
+}
+
+// TestBuildMIMEMessage_MessageIDUnique verifies that two emails get different Message-IDs.
+func TestBuildMIMEMessage_MessageIDUnique(t *testing.T) {
+	msg := func() *Message {
+		return &Message{
+			To:       []string{"to@example.com"},
+			From:     "sender@example.com",
+			Subject:  "Test",
+			HTMLBody: "<p>Hello</p>",
+		}
+	}
+
+	raw1, err := buildMIMEMessage(msg())
+	if err != nil {
+		t.Fatalf("unexpected error building first message: %v", err)
+	}
+	raw2, err := buildMIMEMessage(msg())
+	if err != nil {
+		t.Fatalf("unexpected error building second message: %v", err)
+	}
+
+	extractMsgID := func(s string) string {
+		for _, line := range strings.Split(s, "\r\n") {
+			if strings.HasPrefix(line, "Message-ID:") {
+				return strings.TrimSpace(strings.TrimPrefix(line, "Message-ID:"))
+			}
+		}
+		return ""
+	}
+
+	id1 := extractMsgID(string(raw1))
+	id2 := extractMsgID(string(raw2))
+	if id1 == "" || id2 == "" {
+		t.Fatalf("could not extract Message-ID from output (id1=%q, id2=%q)", id1, id2)
+	}
+	if id1 == id2 {
+		t.Errorf("expected unique Message-IDs, but both were %q", id1)
+	}
+	for _, id := range []string{id1, id2} {
+		if !strings.HasPrefix(id, "<") || !strings.HasSuffix(id, ">") || !strings.Contains(id, "@") {
+			t.Errorf("Message-ID %q does not match RFC 5322 <local@domain> format", id)
+		}
+	}
+}
+
+// TestBuildMIMEMessage_SubjectCRLFSanitized verifies that CR/LF in the subject
+// cannot inject extra headers into the MIME output.
+func TestBuildMIMEMessage_SubjectCRLFSanitized(t *testing.T) {
+	injectedSubject := "Hello\r\nX-Injected: evil"
+	msg := &Message{
+		To:       []string{"to@example.com"},
+		From:     "sender@example.com",
+		Subject:  injectedSubject,
+		HTMLBody: "<p>body</p>",
+	}
+	raw, err := buildMIMEMessage(msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, line := range strings.Split(string(raw), "\r\n") {
+		if strings.HasPrefix(line, "X-Injected:") {
+			t.Errorf("CR/LF injection succeeded: found standalone header line %q", line)
+		}
+	}
+}
