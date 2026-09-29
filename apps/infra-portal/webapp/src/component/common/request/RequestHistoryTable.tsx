@@ -130,8 +130,7 @@ export default function RequestHistoryTable({
       fetchRepositoryRequests({
         memberEmail: memberEmailProp,
         leadEmail: leadEmailProp,
-        limit: 100,
-        offset: 0,
+        fetchAll: true,
       }),
     );
     if (memberEmailProp) {
@@ -145,8 +144,7 @@ export default function RequestHistoryTable({
   
   useEffect(() => {
     refetch();
-  }, [dispatch, page, pageSize, memberEmailProp, leadEmailProp, refetch]);
-
+  }, [refetch]);
   const accessRequestList = accessRequestState.accessRequests ?? [];
 
   const unifiedRows: UnifiedRequest[] = useMemo(() => {

@@ -2506,21 +2506,55 @@ service http:InterceptableService / on httpListener {
             };
         }
 
-        boolean|error isLead = db:isRepoTeamLead(payload.organizationId, payload.leadEmail);
-        if isLead is error {
-            log:printError("Error while validating repo team lead!", isLead);
-            return <http:InternalServerError>{body: {message: "Error while validating repo team lead!"}};
+        db:Organization|error organization = db:getOrganizationById(payload.organizationId);
+        if organization is error {
+            log:printError("Error while fetching organization!", organization);
+            return <http:InternalServerError>{body: {message: "Error while fetching organization!"}};
         }
-        if !isLead {
-            return <http:BadRequest>{
-                body: {message: "leadEmail must be an active repo team lead for this organization."}
-            };
+        if organization.organizationName.toLowerAscii() != payload.orgName.toLowerAscii() {
+            return <http:BadRequest>{body: {message: "Organization does not match the repository."}};
         }
 
+        db:RepoTeamLead[]|error leads = db:getRepoTeamLeads();
+        if leads is error {
+            log:printError("Error while validating repo team lead!", leads);
+            return <http:InternalServerError>{body: {message: "Error while validating repo team lead!"}};
+        }
+
+        string? verifiedLeadEmail = ();
+        foreach db:RepoTeamLead lead in leads {
+            if lead.organizationId != payload.organizationId {
+                continue;
+            }
+            string? candidate = lead.leadEmail;
+            if candidate is () || candidate.toLowerAscii() != payload.leadEmail.toLowerAscii() {
+                continue;
+            }
+            gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(
+                organization.organizationName, lead.teamSlug);
+            if teamRepos is error {
+                log:printError("Error while listing team repositories!", teamRepos);
+                return <http:InternalServerError>{body: {message: "Error while validating repository ownership!"}};
+            }
+            foreach gh:TeamRepository repo in teamRepos {
+                if repo.name.toLowerAscii() == payload.repoName.toLowerAscii() {
+                    verifiedLeadEmail = candidate;
+                    break;
+                }
+            }
+            if verifiedLeadEmail is string {
+                break;
+            }
+        }
+        if verifiedLeadEmail is () {
+            return <http:BadRequest>{
+                body: {message: "leadEmail is not the lead of a team that has this repository."}
+            };
+        }
         db:AccessRequestCreate createPayload = {
             email: userInfo.email,
             githubUsername: githubUser.login,
-            leadEmail: payload.leadEmail,
+            leadEmail: verifiedLeadEmail,
             ccList: payload.ccList,
             organizationId: payload.organizationId,
             orgName: payload.orgName,

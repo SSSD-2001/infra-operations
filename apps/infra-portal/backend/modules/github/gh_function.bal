@@ -568,35 +568,23 @@ public isolated function getUserDetails(string githubUserId) returns GitHubUser|
     return githubClient->/github/user.get(accountId = githubUserId);
 }
 
-# List repositories for a team (paginated, capped).
+# List every repository for a team.
 #
 # + orgName - Organization login
 # + teamSlug - Team slug
-# + maxRepos - Soft cap to avoid huge payloads (e.g. 200)
 # + return - Repositories or error
-public isolated function getTeamRepositories(string orgName, string teamSlug, int maxRepos = 200)
+public isolated function getTeamRepositories(string orgName, string teamSlug)
     returns TeamRepository[]|error {
     http:Client githubClient = check createGithubClient();
     TeamRepository[] allRepos = [];
     int page = 1;
-    int perPage = 100;
 
-    while allRepos.length() < maxRepos {
-        TeamRepository[]|error pageRepos =
-            githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(perPage = perPage, page = page);
-        if pageRepos is error {
-            return pageRepos;
-        }
-        if pageRepos.length() == 0 {
-            break;
-        }
-        foreach TeamRepository repo in pageRepos {
-            allRepos.push(repo);
-            if allRepos.length() >= maxRepos {
-                break;
-            }
-        }
-        if pageRepos.length() < perPage {
+    while true {
+        TeamRepository[] pageRepos = check githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allRepos.push(...pageRepos);
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
@@ -604,41 +592,27 @@ public isolated function getTeamRepositories(string orgName, string teamSlug, in
     return allRepos;
 }
 
-# List repositories in an organization (paginated, capped).
+# List every repository in an organization.
 #
 # + orgName - GitHub org login
-# + maxRepos - Soft cap
 # + return - Repositories or error
-public isolated function getOrganizationRepositories(string orgName, int maxRepos = 200)
-    returns OrgRepository[]|error {
+public isolated function getOrganizationRepositories(string orgName) returns OrgRepository[]|error {
     http:Client githubClient = check createGithubClient();
     OrgRepository[] allRepos = [];
     int page = 1;
-    int perPage = 100;
 
-    while allRepos.length() < maxRepos {
-        OrgRepository[]|error pageRepos =
-            githubClient->/orgs/[orgName]/repos.get(perPage = perPage, page = page, repoType = "all");
-        if pageRepos is error {
-            return pageRepos;
-        }
-        if pageRepos.length() == 0 {
-            break;
-        }
-        foreach OrgRepository repo in pageRepos {
-            allRepos.push(repo);
-            if allRepos.length() >= maxRepos {
-                break;
-            }
-        }
-        if pageRepos.length() < perPage {
+    while true {
+        OrgRepository[] pageRepos = check githubClient->/orgs/[orgName]/repos.get(
+            perPage = DEFAULT_LIMIT, page = page, repoType = "all"
+        );
+        allRepos.push(...pageRepos);
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
     }
     return allRepos;
 }
-
 public isolated function addRepositoryCollaborator(
     string orgName, string repoName, string userName, string permission
 ) returns error? {

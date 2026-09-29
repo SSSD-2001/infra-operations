@@ -111,9 +111,9 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             dispatch(fetchDefaultRepositoryAccess());
             dispatch(fetchAccessRequests());
             if (workEmail) {
-                void dispatch(fetchRepositoryRequests({ memberEmail: workEmail, limit: 100, offset: 0 }));
+                void dispatch(fetchRepositoryRequests({ memberEmail: workEmail, fetchAll: true }));
               }
-        }, [dispatch]);
+            }, [dispatch, workEmail]);
   
     const formik = useFormik({
         initialValues: {
