@@ -280,7 +280,7 @@ export default function DefaultTeamTable({ gridArea }: { gridArea?: string }) {
   const PERMISSION_LEVELS = ["push", "pull", "triage", "admin"] satisfies readonly string[];
 
   return (
-    <Box sx={{ gridArea }}>
+    <Box sx={{ gridArea, minWidth: 0, overflow: "hidden" }}>
       <BackgroundLoader open={isMutating} message={defaultTeamsState.errorMessage} />
 
       <Box

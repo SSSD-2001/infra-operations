@@ -42,3 +42,25 @@ public isolated function updateGithubUserId(string email, string githubUserId) r
     }
     return users[0];
 }
+
+# Find a user by GitHub account id stored on Connect GitHub.
+#
+# + githubUserId - GitHub numeric user id as a string
+# + return - Work email, () if none, or error
+public isolated function searchWorkEmailByGithubUserId(string githubUserId) returns string?|error {
+    UserSearchResult response = check scimOperationsClient->/organizations/internal/users/search.post({
+        domain: "DEFAULT",
+        filter: string `urn:scim:schemas:extension:custom:User:githubUserId eq "${githubUserId}"`,
+        attributes: ["id", "userName", "urn:scim:schemas:extension:custom:User"]
+    });
+    if response.Resources.length() == 0 {
+        return ();
+    }
+    string userName = response.Resources[0].userName;
+    int? slashIndex = userName.lastIndexOf("/");
+    string email = (slashIndex is int ? userName.substring(slashIndex + 1) : userName).toLowerAscii();
+    if email.endsWith("@wso2.com") {
+        return email;
+    }
+    return ();
+}

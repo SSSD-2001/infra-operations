@@ -120,6 +120,7 @@ export interface RepositoryRequestFilter {
   limit?: number;
   offset?: number;
   repoName?: string;
+  fetchAll?: boolean;
 }
 
 export const fetchRepositoryRequests = createAsyncThunk<
@@ -131,15 +132,29 @@ export const fetchRepositoryRequests = createAsyncThunk<
   async (filterPayload: RepositoryRequestFilter, { dispatch, rejectWithValue }) => {
     APIService.getCancelToken().cancel();
     const newCancelTokenSource = APIService.updateCancelToken();
+    const { fetchAll, ...query } = filterPayload;
+    const loadPage = (offset: number, limit?: number) =>
+      APIService.getInstance().get<RepositoryRequests>(AppConfig.serviceUrls.repositoryRequests, {
+        cancelToken: newCancelTokenSource.token,
+        params: { ...query, limit, offset },
+      });
     try {
-      const response: AxiosResponse<RepositoryRequests> = await APIService.getInstance().get(
-        AppConfig.serviceUrls.repositoryRequests,
-        {
-          cancelToken: newCancelTokenSource.token,
-          params: { ...filterPayload },
-        },
-      );
-      return response.data;
+      if (!fetchAll) {
+        const response = await loadPage(query.offset ?? 0, query.limit);
+        return response.data;
+      }
+
+      const pageSize = 100;
+      const first = await loadPage(0, pageSize);
+      const rows = [...first.data.repositoryRequests];
+      while (rows.length < first.data.totalCount) {
+        const next = await loadPage(rows.length, pageSize);
+        if (next.data.repositoryRequests.length === 0) {
+          break;
+        }
+        rows.push(...next.data.repositoryRequests);
+      }
+      return { ...first.data, repositoryRequests: rows };
     } catch (error) {
       if (axios.isCancel(error)) {
         return rejectWithValue("Request canceled");
@@ -389,7 +404,7 @@ const RepositoryRequestSlice = createSlice({
       .addCase(approveRepositoryRequest.pending, (state) => {
         state.submitState = State.loading;
         state.functionType = "approve";
-        state.errorMessage = "Approving repositoryRequests...";
+        state.errorMessage = "Approving Repository Requests...";
       })
       .addCase(approveRepositoryRequest.fulfilled, (state) => {
         state.submitState = State.idle;

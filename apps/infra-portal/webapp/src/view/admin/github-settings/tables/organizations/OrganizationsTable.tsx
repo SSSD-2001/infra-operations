@@ -54,6 +54,7 @@ import {
   syncOrganization,
   updateOrganization,
 } from "@root/src/slices/organizationsSlice/organizations";
+import { fetchRepoTeamLeads } from "@root/src/slices/repoTeamLeadsSlice/repoTeamLeads";
 import { useAppDispatch, useAppSelector } from "@root/src/slices/store";
 import { ConfirmationType, State } from "@root/src/types/types";
 
@@ -119,8 +120,8 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
         try {
           await dispatch(deleteOrganization(organizationId));
           dispatch(fetchOrganizations());
+          await dispatch(fetchRepoTeamLeads());
         } catch {
-          // Handled in thunk
         }
       },
       "Delete",
@@ -145,6 +146,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
       </Box>,
       ConfirmationType.accept,
       async () => {
+        setAddAnchorEl(null);
         try {
           await dispatch(
             addOrganization({
@@ -154,6 +156,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
               teamIds: values.defaultTeams || [],
             }),
           );
+          await dispatch(fetchRepoTeamLeads());
           const orgs: Organization[] = (await dispatch(fetchOrganizations()).unwrap()) ?? [];
           const syncedOrg = orgs?.find((org) => org.organizationName === values.organizationName);
           if (
@@ -435,7 +438,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
   }
 
   return (
-    <Box sx={{ gridArea }}>
+    <Box sx={{ gridArea, minWidth: 0, overflow: "hidden" }}>
       <BackgroundLoader open={isMutating} message={organizationsState.errorMessage} />
 
       <Box

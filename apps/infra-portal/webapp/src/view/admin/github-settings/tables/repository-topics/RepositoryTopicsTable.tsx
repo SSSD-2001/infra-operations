@@ -227,7 +227,7 @@ export default function RepositoryTopicsTable({ gridArea }: { gridArea?: string 
   }
 
   return (
-    <Box sx={{ gridArea }}>
+    <Box sx={{ gridArea, minWidth: 0, overflow: "hidden" }}>
       <BackgroundLoader open={isMutating} message={topicsState.errorMessage} />
       <Box
         sx={{

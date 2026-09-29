@@ -172,3 +172,27 @@ public type DefaultRepositoryAccessResponse record {|
     # Organizations and repos (empty when status is not granted)
     DefaultAccessOrganization[] organizations;
 |};
+
+# Body for POST /repository-access-requests.
+public type AccessRequestPayload record {|
+    # Functional lead email
+    string leadEmail;
+    # Comma-separated CC emails (use "" if none)
+    string ccList;
+    # github_organizations.organization_id
+    int organizationId;
+    # GitHub org login
+    string orgName;
+    # Existing repository name
+    string repoName;
+    # pull, triage, or push
+    string permission;
+    # Why access is needed
+    string justification;
+|};
+
+# Body for PUT /repo-team-leads/{id}.
+public type RepoTeamLeadUpdate record {|
+    # Lead email
+    string leadEmail;
+|};

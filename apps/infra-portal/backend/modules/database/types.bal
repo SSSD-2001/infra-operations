@@ -343,3 +343,119 @@ public type OrganizationDefaultRepository record {|
     @sql:Column {name: "access_type"}
     string accessType;
 |};
+
+# Row from access_requests.
+public type AccessRequest record {|
+    # Access request id
+    @sql:Column {name: "id"}
+    readonly int id;
+    # Requester email
+    @sql:Column {name: "email"}
+    string email;
+    # GitHub username of the requester
+    @sql:Column {name: "github_username"}
+    string githubUsername;
+    # Functional lead email
+    @sql:Column {name: "lead_email"}
+    string leadEmail;
+    # Comma-separated CC emails
+    @sql:Column {name: "cc_list"}
+    string ccList;
+    # Organization id
+    @sql:Column {name: "organization_id"}
+    int organizationId;
+    # GitHub organization login
+    @sql:Column {name: "org_name"}
+    string orgName;
+    # Repository name
+    @sql:Column {name: "repo_name"}
+    string repoName;
+    # Requested permission
+    @sql:Column {name: "permission"}
+    string permission;
+    # Why access is needed
+    @sql:Column {name: "justification"}
+    string justification;
+    # Request state
+    @sql:Column {name: "state"}
+    string state;
+    # Reviewer email
+    @sql:Column {name: "reviewer_email"}
+    string? reviewerEmail;
+    # Review comment
+    @sql:Column {name: "review_comment"}
+    string? reviewComment;
+    # Created timestamp
+    @sql:Column {name: "timestamp"}
+    string timestamp;
+    # Last updated timestamp
+    @sql:Column {name: "updated_at"}
+    string? updatedAt;
+|};
+
+# Payload to insert a new access request (Pending).
+public type AccessRequestCreate record {|
+    # Requester email
+    string email;
+    # GitHub username of the requester
+    string githubUsername;
+    # Functional lead email
+    string leadEmail;
+    # Comma-separated CC emails
+    string ccList;
+    # Organization id
+    int organizationId;
+    # GitHub organization login
+    string orgName;
+    # Repository name
+    string repoName;
+    # Requested permission
+    string permission;
+    # Why access is needed
+    string justification;
+|};
+
+# Row from repo_team_leads.
+public type RepoTeamLead record {|
+    # Team lead row id
+    @sql:Column {name: "id"}
+    readonly int id;
+    # Organization id
+    @sql:Column {name: "organization_id"}
+    int organizationId;
+    # Organization name
+    @sql:Column {name: "organization_name"}
+    string organizationName;
+    # GitHub team name
+    @sql:Column {name: "team_name"}
+    string teamName;
+    # GitHub team slug
+    @sql:Column {name: "team_slug"}
+    string teamSlug;
+    # Team lead email
+    @sql:Column {name: "lead_email"}
+    string? leadEmail;
+|};
+
+# Result of syncing repo team leads.
+public type RepoTeamLeadSyncResult record {|
+    # Number of teams added
+    int addedCount;
+    # Number of teams deleted
+    int deletedCount;
+    # Number of teams updated
+    int updatedCount;
+|};
+
+# Row from repo_team_lead_keys.
+public type RepoTeamLeadKey record {|
+    # Organization id
+    @sql:Column {name: "organization_id"}
+    int organizationId;
+    # GitHub team slug
+    @sql:Column {name: "team_slug"}
+    string teamSlug;
+    # Team lead email
+    @sql:Column {name: "lead_email"}
+    string? leadEmail;
+|};

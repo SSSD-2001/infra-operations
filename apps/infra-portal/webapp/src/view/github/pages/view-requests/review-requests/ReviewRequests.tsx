@@ -35,7 +35,7 @@ export default function ReviewRequests() {
         variant="h6"
         sx={{ fontWeight: 600, mt: 3, color: theme.palette.customText.primary.p1.active }}
       >
-        Review Repository Requests
+        Review Requests
       </Typography>
       <Typography variant="body2" sx={{ color: theme.palette.customText.primary.p3.active }}>
         Review, comment on and approve or reject repository requests.

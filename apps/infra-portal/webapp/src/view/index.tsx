@@ -32,6 +32,9 @@ const myRequests = lazy(() => import("@view/github/pages/view-requests/my-reques
 const reviewRequests = lazy(
   () => import("@view/github/pages/view-requests/review-requests/ReviewRequests"),
 );
+const requestExistingRepoAccess = lazy(
+  () => import("./github/pages/repository-access/RequestExistingRepoAccess"),
+);
 export const View = {
   help,
   nestedPage,
@@ -44,4 +47,5 @@ export const View = {
   repositoryCreationRequests,
   myRequests,
   reviewRequests,
+  requestExistingRepoAccess,
 };

@@ -21,6 +21,7 @@ import DefaultTeamTable from "./tables/default-teams/DefaultTeamTable";
 import FunctionalLeads from "./tables/functional-leads/FunctionalLeads";
 import OrganizationsTable from "./tables/organizations/OrganizationsTable";
 import RepositoryTopicsTable from "./tables/repository-topics/RepositoryTopicsTable";
+import RepoTeamLeadsTable from "./tables/repo-team-leads/RepoTeamLeadsTable";
 
 export default function GithubSettings() {
   return (
@@ -32,31 +33,17 @@ export default function GithubSettings() {
         sx={{
           gridTemplateColumns: {
             xs: "1fr",
-            sm: "1fr",
-            md: "1fr",
-            lg: "1fr 1fr 1fr",
+            md: "1fr 1fr",
           },
           gridTemplateAreas: {
-            xs: `"leads" 
-                 "orgs" 
-                 "topics" 
-                 "teams"`,
-
-            sm: `"leads" 
-                 "orgs" 
-                 "topics" 
-                 "teams"`,
-
-            md: `"leads" "orgs"
-                 "topics" "teams"`,
-
-            // lg: `"leads orgs"
-            //      "topics teams"`,
-            lg: `"orgs orgs orgs" 
-                 "leads topics teams"`,
+            xs: `"orgs" "repoLeads" "leads" "topics" "teams"`,
+            md: `"orgs repoLeads"
+                 "leads topics"
+                 "teams ."`,
           },
         }}
       >
+        <RepoTeamLeadsTable gridArea="repoLeads" />
         <DefaultTeamTable gridArea="teams" />
         <FunctionalLeads gridArea="leads" />
         <RepositoryTopicsTable gridArea="topics" />

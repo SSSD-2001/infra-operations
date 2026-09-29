@@ -51,8 +51,21 @@ public isolated function verifyReadOnlyTeam(string orgName) returns boolean|erro
 # + return - List of teams or error
 public isolated function getInternalCommitterTeams(string orgName) returns string[]|error {
     http:Client githubClient = check createGithubClient();
-    GitHubTeam[] teamsResponse = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams;
-    return from var team in teamsResponse
+    GitHubTeam[] allTeams = [];
+    int page = 1;
+
+    while true {
+        GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allTeams.push(...pageTeams);
+        if pageTeams.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+
+    return from var team in allTeams
         where team.slug.includes(INTERNAL_COMMITTER_FORMAT)
         select team.slug;
 }
@@ -437,6 +450,77 @@ public isolated function getTeamsForOrganization(string orgName, int page, int p
     return githubClient->/orgs/[orgName]/teams.get(perPage = perPage, page = page);
 }
 
+# API Call to get all teams for an organization.
+#
+# + orgName - Organization name
+# + return - List of teams or error
+public isolated function getAllTeamsForOrganization(string orgName) returns GitHubTeam[]|error {
+    http:Client githubClient = check createGithubClient();
+    GitHubTeam[] allTeams = [];
+    int page = 1;
+
+    while true {
+        GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams.get(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allTeams.push(...pageTeams);
+        if pageTeams.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+    return allTeams;
+}
+
+# List team maintainers (paginated).
+#
+# + orgName - Organization login
+# + teamSlug - Team slug
+# + return - Maintainer members or error
+public isolated function getTeamMaintainers(string orgName, string teamSlug) returns TeamMember[]|error {
+    http:Client githubClient = check createGithubClient();
+    return githubClient->/orgs/[orgName]/teams/[teamSlug]/members.get(
+        role = "maintainer", perPage = DEFAULT_LIMIT, page = 1
+    );
+}
+
+# Map a GitHub maintainer to a WSO2 work email.
+#
+# + member - GitHub team member
+# + employeeEmails - Lowercased HR work emails
+# + loginEmailCache - Cache of login -> resolved email
+# + return - WSO2 email or ()
+public isolated function resolveMaintainerWorkEmail(
+    TeamMember member,
+    map<boolean> employeeEmails,
+    map<string?> loginEmailCache
+) returns string? {
+    string loginKey = member.login.toLowerAscii();
+    if loginEmailCache.hasKey(loginKey) {
+        return loginEmailCache[loginKey];
+    }
+
+    string? resolved = ();
+    string? memberEmail = member?.email;
+    if memberEmail is string && isKnownWso2Employee(memberEmail, employeeEmails) {
+        resolved = memberEmail.toLowerAscii();
+    }
+
+    if resolved is () {
+        string guessed = string `${loginKey}@wso2.com`;
+        if employeeEmails.hasKey(guessed) {
+            resolved = guessed;
+        }
+    }
+
+    loginEmailCache[loginKey] = resolved;
+    return resolved;
+}
+
+isolated function isKnownWso2Employee(string email, map<boolean> employeeEmails) returns boolean {
+    return email.toLowerAscii().endsWith("@wso2.com");
+}
+
 # API Call to add or update team membership for multiple users.
 #
 # + inputs - List of input objects containing organization name, team slug, user name, and role
@@ -484,38 +568,63 @@ public isolated function getUserDetails(string githubUserId) returns GitHubUser|
     return githubClient->/github/user.get(accountId = githubUserId);
 }
 
-# List repositories for a team (paginated, capped).
+# List every repository for a team.
 #
 # + orgName - Organization login
 # + teamSlug - Team slug
-# + maxRepos - Soft cap to avoid huge payloads (e.g. 200)
 # + return - Repositories or error
-public isolated function getTeamRepositories(string orgName, string teamSlug, int maxRepos = 200)
+public isolated function getTeamRepositories(string orgName, string teamSlug)
     returns TeamRepository[]|error {
     http:Client githubClient = check createGithubClient();
     TeamRepository[] allRepos = [];
     int page = 1;
-    int perPage = 100;
 
-    while allRepos.length() < maxRepos {
-        TeamRepository[]|error pageRepos =
-            githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(perPage = perPage, page = page);
-        if pageRepos is error {
-            return pageRepos;
-        }
-        if pageRepos.length() == 0 {
-            break;
-        }
-        foreach TeamRepository repo in pageRepos {
-            allRepos.push(repo);
-            if allRepos.length() >= maxRepos {
-                break;
-            }
-        }
-        if pageRepos.length() < perPage {
+    while true {
+        TeamRepository[] pageRepos = check githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allRepos.push(...pageRepos);
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
     }
     return allRepos;
+}
+
+# List every repository in an organization.
+#
+# + orgName - GitHub org login
+# + return - Repositories or error
+public isolated function getOrganizationRepositories(string orgName) returns OrgRepository[]|error {
+    http:Client githubClient = check createGithubClient();
+    OrgRepository[] allRepos = [];
+    int page = 1;
+
+    while true {
+        OrgRepository[] pageRepos = check githubClient->/orgs/[orgName]/repos.get(
+            perPage = DEFAULT_LIMIT, page = page, repoType = "all"
+        );
+        allRepos.push(...pageRepos);
+        if pageRepos.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+    return allRepos;
+}
+public isolated function addRepositoryCollaborator(
+    string orgName, string repoName, string userName, string permission
+) returns error? {
+    http:Client githubClient = check createGithubClient();
+    http:Response|error response =
+    githubClient->/orgs/[orgName]/repos/[orgName]/[repoName]/collaborators/[userName].put({
+        permission: permission
+    });
+    if response is error {
+        return response;
+    }
+    if response.statusCode >= 300 {
+        return error(string `Failed to add collaborator: HTTP ${response.statusCode}`);
+    }
 }
