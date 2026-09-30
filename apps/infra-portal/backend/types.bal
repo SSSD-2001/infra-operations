@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 import infra_portal.database;
+import infra_portal.types;
 
 # Represents the response structure for security dashboard links.
 public type SecurityDashboardLinks record {|
@@ -168,7 +169,7 @@ public type DefaultAccessOrganization record {|
 # Response for GET default-repository-access.
 public type DefaultRepositoryAccessResponse record {|
     # Default access status: not_granted, granting, or granted
-    database:DefaultAccessStatus status;
+    types:DefaultAccessStatus status;
     # Organizations and repos (empty when status is not granted)
     DefaultAccessOrganization[] organizations;
 |};

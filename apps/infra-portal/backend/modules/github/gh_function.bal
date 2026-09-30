@@ -21,6 +21,13 @@ import ballerina/lang.array;
 import ballerina/lang.value;
 import ballerina/log;
 
+final cache:Cache githubUserCache = new ({
+    capacity: 2000,
+    defaultMaxAge: GITHUB_USER_CACHE_MAX_AGE,
+    cleanupInterval: 3600.0
+});
+
+
 # Checks whether the organization can be accessed.
 #
 # + orgName - Name of the organization
@@ -57,10 +64,10 @@ public isolated function getInternalCommitterTeams(string orgName) returns strin
     int page = 1;
     while true {
         GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
-            perPage = DEFAULT_PER_PAGE, page = page
+            perPage = DEFAULT_LIMIT, page = page
         );
         allTeams.push(...pageTeams);
-        if pageTeams.length() < DEFAULT_PER_PAGE {
+        if pageTeams.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
@@ -485,12 +492,6 @@ public isolated function addOrUpdateTeamMemberships(AddOrUpdateTeamMemberInforma
     };
 }
 
-final cache:Cache githubUserCache = new ({
-    capacity: 2000,
-    defaultMaxAge: GITHUB_USER_CACHE_MAX_AGE,
-    cleanupInterval: 3600.0
-});
-
 # API Call to get GitHub user details by account ID.
 #
 # + githubUserId - GitHub account ID
@@ -522,18 +523,17 @@ public isolated function getUserDetails(string githubUserId) returns GitHubUser|
 # + orgName - Organization login
 # + teamSlug - Team slug
 # + return - Repositories or error
-public isolated function getTeamRepositories(string orgName, string teamSlug)
-    returns TeamRepository[]|error {
+public isolated function getTeamRepositories(string orgName, string teamSlug) returns TeamRepository[]|error {
     http:Client githubClient = check createGithubClient();
     TeamRepository[] allRepos = [];
     int page = 1;
 
     while true {
         TeamRepository[] pageRepos = check githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(
-            perPage = DEFAULT_PER_PAGE, page = page
+            perPage = DEFAULT_LIMIT, page = page
         );
         allRepos.push(...pageRepos);
-        if pageRepos.length() < DEFAULT_PER_PAGE {
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;

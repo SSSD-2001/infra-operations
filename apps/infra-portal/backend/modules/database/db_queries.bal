@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/sql;
+import infra_portal.types;
 
 # Query to get a specific repository request by id.
 #
@@ -768,7 +769,7 @@ isolated function deleteDefaultTeamQuery(int teamId) returns sql:ParameterizedQu
 # + employeeId - HR employee id
 # + status - Status of the default access
 # + return - Parameterized upsert query
-isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, DefaultAccessStatus status)
+isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, types:DefaultAccessStatus status)
     returns sql:ParameterizedQuery => `
     INSERT INTO user_default_repository_access (employee_id, status)
     VALUES (${employeeId}, ${status})
@@ -790,7 +791,7 @@ isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
 #
 # + accessType - Access category filter
 # + return - Parameterized select query
-isolated function getOrganizationDefaultRepositoriesByAccessTypeQuery(string accessType)
+isolated function getOrganizationDefaultRepositoriesByAccessTypeQuery(types:RepoAccessType accessType)
     returns sql:ParameterizedQuery => `
     SELECT
         org_name,
