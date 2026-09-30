@@ -18,7 +18,7 @@ import { GitHub as GitHubIcon } from "@mui/icons-material";
 import { Box, Button, Chip, CircularProgress, Typography, alpha, useTheme } from "@mui/material";
 import { useEffect, useState } from "react";
 
-import { GITHUB_OAUTH_STATE_KEY, OAUTH_CALLBACK_STATE_KEY, STATE_EXPIRY_MS, SnackMessage } from "@config/constant";
+import { GITHUB_OAUTH_STATE_KEY, SnackMessage } from "@config/constant";
 import { useConfirmationModalContext } from "@root/src/context";
 import { Role, UserState, setUserAuthData } from "@root/src/slices/authSlice/auth";
 import { ConfirmationType } from "@root/src/types/types";
@@ -34,7 +34,6 @@ import { APIService } from "@utils/apiService";
 import {
   consumePendingOAuthCode,
   GitHubConnectResult,
-  GitHubOAuthStoredState,
   consumeStoredGitHubConnectResult,
   resolveGitHubConnectionStatus,
   startGitHubOAuth,
@@ -105,32 +104,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
     const run = async () => {
       setIsPostConnectLoading(true);
       try {
-        const callbackState = sessionStorage.getItem(OAUTH_CALLBACK_STATE_KEY);
-        const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
-        let storedObj: GitHubOAuthStoredState | null = null;
-        try {
-          if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
-        } catch {
-          storedObj = null;
-        }
         sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
-    
-        if (
-          !callbackState ||
-          !storedObj ||
-          callbackState !== storedObj.state ||
-          Date.now() - storedObj.createdAt > STATE_EXPIRY_MS
-        ) {
-          dispatch(
-            enqueueSnackbarMessage({
-              message: SnackMessage.error.githubConnectMessage,
-              type: "error",
-            }),
-          );
-          return;
-        }
-    
         const result = await dispatch(connectGitHub({ code: pendingCode }));
 
         if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {

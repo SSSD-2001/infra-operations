@@ -26,8 +26,8 @@ public const float RETRY_BACKOFF_FACTOR = 2.0;
 # client retry configuration for maximum wait interval in seconds.
 public const decimal RETRY_MAX_INTERVAL = 20.0;
 
-# Default page size for GitHub list calls.
-public const int DEFAULT_PER_PAGE = 100;
+# Default limit for the entity.
+public const int DEFAULT_LIMIT = 100;
 
 # Default lead email assigned on the first repo-team-leads sync.
 public const string DEFAULT_REPO_TEAM_LEAD_EMAIL = "maheshika@wso2.com";

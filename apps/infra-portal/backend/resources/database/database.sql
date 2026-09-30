@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS organizations_default_repositories (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
     org_name VARCHAR(255) NOT NULL,
     team_slug VARCHAR(255) NOT NULL,
-    access_type VARCHAR(255) NOT NULL,
+    access_type ENUM('PERMANENT','CS','INTERN') NOT NULL,
     UNIQUE KEY unique_org_team_access (org_name, team_slug, access_type)
 );
 

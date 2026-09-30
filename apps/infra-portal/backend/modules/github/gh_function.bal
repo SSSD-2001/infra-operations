@@ -56,10 +56,10 @@ public isolated function getInternalCommitterTeams(string orgName) returns strin
 
     while true {
         GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
-            perPage = DEFAULT_PER_PAGE, page = page
+            perPage = DEFAULT_LIMIT, page = page
         );
         allTeams.push(...pageTeams);
-        if pageTeams.length() < DEFAULT_PER_PAGE {
+        if pageTeams.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
@@ -461,10 +461,10 @@ public isolated function getAllTeamsForOrganization(string orgName) returns GitH
 
     while true {
         GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams.get(
-            perPage = DEFAULT_PER_PAGE, page = page
+            perPage = DEFAULT_LIMIT, page = page
         );
         allTeams.push(...pageTeams);
-        if pageTeams.length() < DEFAULT_PER_PAGE {
+        if pageTeams.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
@@ -480,7 +480,7 @@ public isolated function getAllTeamsForOrganization(string orgName) returns GitH
 public isolated function getTeamMaintainers(string orgName, string teamSlug) returns TeamMember[]|error {
     http:Client githubClient = check createGithubClient();
     return githubClient->/orgs/[orgName]/teams/[teamSlug]/members.get(
-        role = "maintainer", perPage = DEFAULT_PER_PAGE, page = 1
+        role = "maintainer", perPage = DEFAULT_LIMIT, page = 1
     );
 }
 
@@ -581,10 +581,10 @@ public isolated function getTeamRepositories(string orgName, string teamSlug)
 
     while true {
         TeamRepository[] pageRepos = check githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(
-            perPage = DEFAULT_PER_PAGE, page = page
+            perPage = DEFAULT_LIMIT, page = page
         );
         allRepos.push(...pageRepos);
-        if pageRepos.length() < DEFAULT_PER_PAGE {
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
@@ -603,10 +603,10 @@ public isolated function getOrganizationRepositories(string orgName) returns Org
 
     while true {
         OrgRepository[] pageRepos = check githubClient->/orgs/[orgName]/repos.get(
-            perPage = DEFAULT_PER_PAGE, page = page, repoType = "all"
+            perPage = DEFAULT_LIMIT, page = page, repoType = "all"
         );
         allRepos.push(...pageRepos);
-        if pageRepos.length() < DEFAULT_PER_PAGE {
+        if pageRepos.length() < DEFAULT_LIMIT {
             break;
         }
         page += 1;
