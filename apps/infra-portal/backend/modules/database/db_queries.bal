@@ -948,22 +948,25 @@ isolated function getRepoTeamLeadKeysQuery() returns sql:ParameterizedQuery => `
     WHERE active = true;
 `;
 
-# Fill lead_email only when empty or still the sync default.
+# Fill lead_email only when it still matches the email observed at sync start.
 #
 # + organizationId - Organization id
 # + teamSlug - Team slug
+# + currentLeadEmail - Lead email read before resolution
 # + leadEmail - Lead email to set
 # + return - Parameterized update query
 isolated function fillRepoTeamLeadEmailQuery(
     int organizationId,
     string teamSlug,
+    string? currentLeadEmail,
     string? leadEmail
 ) returns sql:ParameterizedQuery => `
     UPDATE repo_team_leads
     SET lead_email = ${leadEmail}
     WHERE organization_id = ${organizationId}
       AND team_slug = ${teamSlug}
-      AND active = TRUE;
+      AND active = TRUE
+      AND lead_email <=> ${currentLeadEmail};
 `;
 
 # Deactivate repo team leads for inactive organizations.

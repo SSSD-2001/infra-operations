@@ -595,19 +595,21 @@ public isolated function seedRepoTeamLead(
     );
 }
 
-# Fill lead_email only when empty or still the sync default.
+# Fill lead_email only when it still matches the email observed at sync start.
 #
 # + organizationId - Organization id
 # + teamSlug - Team slug
-# + leadEmail - Lead email
+# + currentLeadEmail - Lead email read before resolution
+# + leadEmail - Lead email to set
 # + return - Number of updated rows or error
 public isolated function fillRepoTeamLeadEmail(
     int organizationId,
     string teamSlug,
+    string? currentLeadEmail,
     string? leadEmail
 ) returns int|error {
     sql:ExecutionResult result = check databaseClient->execute(
-        fillRepoTeamLeadEmailQuery(organizationId, teamSlug, leadEmail)
+        fillRepoTeamLeadEmailQuery(organizationId, teamSlug, currentLeadEmail, leadEmail)
     );
     return result.affectedRowCount ?: 0;
 }

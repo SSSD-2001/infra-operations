@@ -1608,7 +1608,8 @@ service http:InterceptableService / on httpListener {
                 string? currentEmail = existingEmails[mapKey];
                 boolean needsLead = isNew
                     || currentEmail is ()
-                    || currentEmail == "";
+                    || currentEmail == ""
+                    || currentEmail == gh:DEFAULT_REPO_TEAM_LEAD_EMAIL;
                 if !needsLead {
                     continue;
                 }
@@ -1652,7 +1653,7 @@ service http:InterceptableService / on httpListener {
                     addedCount += 1;
                 } else {
                     int|error filled = db:fillRepoTeamLeadEmail(
-                        org.organizationId, team.slug, leadEmail
+                        org.organizationId, team.slug, currentEmail, leadEmail
                     );
                     if filled is error {
                         return <http:InternalServerError>{body: {message: "Error while updating repo team lead!"}};
