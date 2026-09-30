@@ -305,6 +305,20 @@ public enum RepositoryRequestState {
     REJECTED = "Rejected"
 }
 
+# Status stored in user_default_repository_access.status.
+public enum DefaultAccessStatus {
+    NOT_GRANTED = "not_granted",
+    GRANTING = "granting",
+    GRANTED = "granted"
+}
+
+# Access category stored in organizations_default_repositories.access_type.
+public enum RepoAccessType {
+    PERMANENT = "PERMANENT",
+    CS = "CS",
+    INTERN = "INTERN"
+}
+
 # Invalid operation error
 public type InvalidOperationError distinct error;
 
@@ -326,9 +340,9 @@ public type UserDefaultRepositoryAccess record {|
     # HR employee id
     @sql:Column {name: "employee_id"}
     string employeeId;
-    # Default access status: not_granted, granting, or granted
+    # Default access status
     @sql:Column {name: "status"}
-    string status;
+    DefaultAccessStatus status;
 |};
 
 # Row from organizations_default_repositories.
@@ -339,7 +353,7 @@ public type OrganizationDefaultRepository record {|
     # Team slug in the organization
     @sql:Column {name: "team_slug"}
     string teamSlug;
-    # Access category: PERMANENT, CS, or INTERN
+    # Repository access type
     @sql:Column {name: "access_type"}
     string accessType;
 |};
