@@ -14,10 +14,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/cache;
 import ballerina/http;
 import ballerina/io;
 import ballerina/lang.array;
 import ballerina/lang.value;
+import ballerina/log;
 
 # Checks whether the organization can be accessed.
 #
@@ -53,18 +55,16 @@ public isolated function getInternalCommitterTeams(string orgName) returns strin
     http:Client githubClient = check createGithubClient();
     GitHubTeam[] allTeams = [];
     int page = 1;
-
     while true {
         GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
-            perPage = DEFAULT_LIMIT, page = page
+            perPage = DEFAULT_PER_PAGE, page = page
         );
         allTeams.push(...pageTeams);
-        if pageTeams.length() < DEFAULT_LIMIT {
+        if pageTeams.length() < DEFAULT_PER_PAGE {
             break;
         }
         page += 1;
     }
-
     return from var team in allTeams
         where team.slug.includes(INTERNAL_COMMITTER_FORMAT)
         select team.slug;
@@ -485,16 +485,36 @@ public isolated function addOrUpdateTeamMemberships(AddOrUpdateTeamMemberInforma
     };
 }
 
+final cache:Cache githubUserCache = new ({
+    capacity: 2000,
+    defaultMaxAge: GITHUB_USER_CACHE_MAX_AGE,
+    cleanupInterval: 3600.0
+});
+
 # API Call to get GitHub user details by account ID.
 #
 # + githubUserId - GitHub account ID
 # + return - GitHub user details or error
 public isolated function getUserDetails(string githubUserId) returns GitHubUser|error {
+    if githubUserCache.hasKey(githubUserId) {
+        GitHubUser|error cached = githubUserCache.get(githubUserId).ensureType();
+        if cached is GitHubUser {
+            return cached;
+        }
+    }
+
     http:Client|error githubClient = createGithubClient();
     if githubClient is error {
         return githubClient;
     }
-    return githubClient->/github/user.get(accountId = githubUserId);
+    GitHubUser|error githubUser = githubClient->/github/user.get(accountId = githubUserId);
+    if githubUser is GitHubUser {
+        error? cacheError = githubUserCache.put(githubUserId, githubUser);
+        if cacheError is error {
+            log:printWarn("Failed to cache GitHub user details", cacheError, githubUserId = githubUserId);
+        }
+    }
+    return githubUser;
 }
 
 # List every repository for a team.

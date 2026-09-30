@@ -124,12 +124,10 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         string? githubUserId = userInfo.githubUserId;
         string? githubUsername = ();
-        boolean githubLookupFailed = false;
         if githubUserId is string {
             gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
             if githubUser is error {
                 // The GitHub username is supplementary, so degrade instead of failing the profile.
-                githubLookupFailed = true;
                 log:printWarn("Error while fetching GitHub username for user-info!",
                         'error = githubUser, email = userInfo.email);
             } else {
@@ -152,17 +150,13 @@ service http:InterceptableService / on new http:Listener(8090) {
             githubUsername
         };
 
-        // Avoid caching a profile with a missing GitHub username so the next call can retry.
-        if !githubLookupFailed {
-            error? cacheError = cache.put(userInfo.email, userInfoResponse);
-            if cacheError is error {
-                log:printWarn("An error occurred while writing user info to the cache", cacheError);
-            }
+        error? cacheError = cache.put(userInfo.email, userInfoResponse);
+        if cacheError is error {
+            log:printWarn("An error occurred while writing user info to the cache", cacheError);
         }
 
         return userInfoResponse;
     }
-
     # Fetch employee information.
     #
     # + ctx - Request object
