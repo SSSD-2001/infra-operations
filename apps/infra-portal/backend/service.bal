@@ -19,6 +19,7 @@ import infra_portal.email;
 import infra_portal.entity;
 import infra_portal.github as gh;
 import infra_portal.scim;
+import infra_portal.types;
 
 import ballerina/cache;
 import ballerina/http;
@@ -1741,7 +1742,7 @@ service http:InterceptableService / on new http:Listener(8090) {
     # + id - Organization ID
     # + return - List of GitHub teams or error
     isolated resource function get
-        organizations/[int id]/github\-teams(http:RequestContext ctx, int page = 1, int perPage = gh:DEFAULT_PER_PAGE)
+        organizations/[int id]/github\-teams(http:RequestContext ctx, int page = 1, int perPage = gh:DEFAULT_LIMIT)
             returns gh:GitHubTeam[]|http:Forbidden|http:InternalServerError {
 
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
@@ -1824,16 +1825,16 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:InternalServerError>{body: {message: customError}};
         }
         if result is () {
-            return {status: db:NOT_GRANTED, organizations: []};
+            return {status: types:NOT_GRANTED, organizations: []};
         }
-        if result.status != db:GRANTED {
+        if result.status != types:GRANTED {
             return {status: result.status, organizations: []};
         }
 
         gh:OrganizationAndTeam[] orgTeams = [];
         if employee.employmentType == PERMANENT {
             db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(db:PERMANENT);
+                db:getOrganizationDefaultRepositoriesByAccessType(types:PERMANENT);
             if orgRepos is error {
                 string customError = "Error while reading default organization repositories!";
                 log:printError(customError, orgRepos);
@@ -1844,7 +1845,7 @@ service http:InterceptableService / on new http:Listener(8090) {
 
             if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
                 db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType(db:CS);
+                    db:getOrganizationDefaultRepositoriesByAccessType(types:CS);
                 if csRepos is error {
                     string customError = "Error while reading default organization repositories!";
                     log:printError(customError, csRepos);
@@ -1856,7 +1857,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             }
         } else if employee.employmentType == INTERNSHIP {
             db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(db:INTERN);
+                db:getOrganizationDefaultRepositoriesByAccessType(types:INTERN);
             if orgRepos is error {
                 string customError = "Error while reading default organization repositories!";
                 log:printError(customError, orgRepos);
@@ -1865,7 +1866,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             orgTeams = from var row in orgRepos
                 select {orgName: row.orgName, teamSlug: row.teamSlug};
         } else {
-            return {status: db:GRANTED, organizations: []};
+            return {status: types:GRANTED, organizations: []};
         }
 
         map<DefaultAccessRepository[]> reposByOrg = {};
@@ -1906,7 +1907,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                 repositories: reposByOrg.get(orgName)
             });
         }
-        return {status: db:GRANTED, organizations};
+        return {status: types:GRANTED, organizations};
     
     }
     # Set default repository access for a GitHub user based on their employment type and department.
@@ -1973,7 +1974,7 @@ service http:InterceptableService / on new http:Listener(8090) {
         gh:OrganizationAndTeam[] orgTeams = [];
         if employee.employmentType == PERMANENT {
             db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(db:PERMANENT);
+                db:getOrganizationDefaultRepositoriesByAccessType(types:PERMANENT);
             if orgRepos is error {
                 string customError = "Error while reading default organization repositories!";
                 log:printError(customError, orgRepos);
@@ -1984,7 +1985,7 @@ service http:InterceptableService / on new http:Listener(8090) {
 
             if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
                 db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType(db:CS);
+                    db:getOrganizationDefaultRepositoriesByAccessType(types:CS);
                 if csRepos is error {
                     string customError = "Error while reading default organization repositories!";
                     log:printError(customError, csRepos);
@@ -1996,7 +1997,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             }
         } else if employee.employmentType == INTERNSHIP {
             db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(db:INTERN);
+                db:getOrganizationDefaultRepositoriesByAccessType(types:INTERN);
             if orgRepos is error {
                 string customError = "Error while reading default organization repositories!";
                 log:printError(customError, orgRepos);
@@ -2029,7 +2030,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                 role: gh:MEMBER
             };
 
-        error? grantingResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, db:GRANTING);
+        error? grantingResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:GRANTING);
         if grantingResult is error {
             string customError = "Error while updating default repository access status!";
             log:printError(customError, grantingResult, employeeId = employee.employeeId);
@@ -2038,7 +2039,7 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         gh:AddOrUpdateTeamMemberResponse|error membershipResult = gh:addOrUpdateTeamMemberships(inputs);
         if membershipResult is error {
-        error? resetResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, db:NOT_GRANTED);
+        error? resetResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:NOT_GRANTED);
             if resetResult is error {
                 log:printError("Failed to reset default access status after GitHub error", resetResult,
                     employeeId = employee.employeeId);
@@ -2048,8 +2049,8 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        db:DefaultAccessStatus status = membershipResult.failedMemberships.length() == 0 &&
-            membershipResult.successfulMemberships.length() > 0 ? db:GRANTED : db:NOT_GRANTED;
+        types:DefaultAccessStatus status = membershipResult.failedMemberships.length() == 0 &&
+            membershipResult.successfulMemberships.length() > 0 ? types:GRANTED : types:NOT_GRANTED;
         error? dbResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, status);
         
         if dbResult is error {

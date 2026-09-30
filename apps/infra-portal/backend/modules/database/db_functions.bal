@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/sql;
+import infra_portal.types;
 
 # Get a specific repository request by id.
 #
@@ -400,7 +401,7 @@ isolated function batchExecuteAddOrganizationDefaultTeams(int organizationId, in
 # + employeeId - HR employee id
 # + status - Status of the default access
 # + return - Error if the DB write fails
-public isolated function upsertUserDefaultRepositoryAccess(string employeeId, DefaultAccessStatus status)
+public isolated function upsertUserDefaultRepositoryAccess(string employeeId, types:DefaultAccessStatus status)
     returns error? {
     _ = check databaseClient->execute(upsertUserDefaultRepositoryAccessQuery(employeeId, status));
 }
@@ -423,7 +424,7 @@ public isolated function getUserDefaultRepositoryAccess(string employeeId)
 #
 # + accessType - Repository access type
 # + return - Rows or error
-public isolated function getOrganizationDefaultRepositoriesByAccessType(RepoAccessType accessType)
+public isolated function getOrganizationDefaultRepositoriesByAccessType(types:RepoAccessType accessType)
     returns OrganizationDefaultRepository[]|error {
     stream<OrganizationDefaultRepository, error?> resultStream =
         databaseClient->query(getOrganizationDefaultRepositoriesByAccessTypeQuery(accessType));

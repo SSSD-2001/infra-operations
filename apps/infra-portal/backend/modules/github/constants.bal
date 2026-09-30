@@ -26,8 +26,8 @@ public const float RETRY_BACKOFF_FACTOR = 2.0;
 # client retry configuration for maximum wait interval in seconds.
 public const decimal RETRY_MAX_INTERVAL = 20.0;
 
-# Default page size for GitHub list calls.
-public const int DEFAULT_PER_PAGE = 100;
+# Default limit for the entity.
+public const int DEFAULT_LIMIT = 100;
 
 # GitHub user details are cached for 6 hours. The username rarely changes.
 public const decimal GITHUB_USER_CACHE_MAX_AGE = 21600.0;

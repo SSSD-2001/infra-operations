@@ -16,6 +16,7 @@
 
 import ballerina/sql;
 import ballerinax/mysql;
+import infra_portal.types;
 
 # [Configurable] database configs.
 type DatabaseConfig record {|
@@ -305,20 +306,6 @@ public enum RepositoryRequestState {
     REJECTED = "Rejected"
 }
 
-# Status stored in user_default_repository_access.status.
-public enum DefaultAccessStatus {
-    NOT_GRANTED = "not_granted",
-    GRANTING = "granting",
-    GRANTED = "granted"
-}
-
-# Access category stored in organizations_default_repositories.access_type.
-public enum RepoAccessType {
-    PERMANENT = "PERMANENT",
-    CS = "CS",
-    INTERN = "INTERN"
-}
-
 # Invalid operation error
 public type InvalidOperationError distinct error;
 
@@ -342,7 +329,7 @@ public type UserDefaultRepositoryAccess record {|
     string employeeId;
     # Default access status
     @sql:Column {name: "status"}
-    DefaultAccessStatus status;
+    types:DefaultAccessStatus status;
 |};
 
 # Row from organizations_default_repositories.
