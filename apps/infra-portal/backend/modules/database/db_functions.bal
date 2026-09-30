@@ -458,9 +458,9 @@ isolated function batchExecuteAddOrganizationDefaultTeams(int organizationId, in
 # Insert or update user default repository access.
 #
 # + employeeId - HR employee id
-# + status - Status of the default access (not_granted, granting, granted)
+# + status - Status of the default access
 # + return - Error if the DB write fails
-public isolated function upsertUserDefaultRepositoryAccess(string employeeId, string status)
+public isolated function upsertUserDefaultRepositoryAccess(string employeeId, DefaultAccessStatus status)
     returns error? {
     _ = check databaseClient->execute(upsertUserDefaultRepositoryAccessQuery(employeeId, status));
 }
@@ -481,9 +481,9 @@ public isolated function getUserDefaultRepositoryAccess(string employeeId)
 
 # Get default org/team mappings for an access type.
 #
-# + accessType - PERMANENT, CS, or INTERN
+# + accessType - Repository access type
 # + return - Rows or error
-public isolated function getOrganizationDefaultRepositoriesByAccessType(string accessType)
+public isolated function getOrganizationDefaultRepositoriesByAccessType(RepoAccessType accessType)
     returns OrganizationDefaultRepository[]|error {
     stream<OrganizationDefaultRepository, error?> resultStream =
         databaseClient->query(getOrganizationDefaultRepositoriesByAccessTypeQuery(accessType));
@@ -599,15 +599,17 @@ public isolated function seedRepoTeamLead(
 #
 # + organizationId - Organization id
 # + teamSlug - Team slug
+# + currentLeadEmail - Lead email observed when sync started
 # + leadEmail - Lead email
 # + return - Number of updated rows or error
 public isolated function fillRepoTeamLeadEmail(
     int organizationId,
     string teamSlug,
+    string? currentLeadEmail,
     string? leadEmail
 ) returns int|error {
     sql:ExecutionResult result = check databaseClient->execute(
-        fillRepoTeamLeadEmailQuery(organizationId, teamSlug, leadEmail)
+        fillRepoTeamLeadEmailQuery(organizationId, teamSlug, currentLeadEmail, leadEmail)
     );
     return result.affectedRowCount ?: 0;
 }

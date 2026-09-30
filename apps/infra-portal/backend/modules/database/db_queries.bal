@@ -774,9 +774,9 @@ isolated function deleteDefaultTeamQuery(int teamId) returns sql:ParameterizedQu
 # Upsert user default repository access by employee id.
 #
 # + employeeId - HR employee id
-# + status - Status of the default access (not_granted, granting, granted)
+# + status - Status of the default access
 # + return - Parameterized upsert query
-isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, string status)
+isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, DefaultAccessStatus status)
     returns sql:ParameterizedQuery => `
     INSERT INTO user_default_repository_access (employee_id, status)
     VALUES (${employeeId}, ${status})
@@ -794,7 +794,7 @@ isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
     WHERE employee_id = ${employeeId}
 `;
 
-# Get default org/team rows by access type (PERMANENT | CS | INTERN).
+# Get default org/team rows by access type.
 #
 # + accessType - Access category filter
 # + return - Parameterized select query
@@ -952,18 +952,21 @@ isolated function getRepoTeamLeadKeysQuery() returns sql:ParameterizedQuery => `
 #
 # + organizationId - Organization id
 # + teamSlug - Team slug
+# + currentLeadEmail - Lead email observed when sync started
 # + leadEmail - Lead email to set
 # + return - Parameterized update query
 isolated function fillRepoTeamLeadEmailQuery(
     int organizationId,
     string teamSlug,
+    string? currentLeadEmail,
     string? leadEmail
 ) returns sql:ParameterizedQuery => `
     UPDATE repo_team_leads
     SET lead_email = ${leadEmail}
     WHERE organization_id = ${organizationId}
       AND team_slug = ${teamSlug}
-      AND active = TRUE;
+      AND active = TRUE
+      AND lead_email <=> ${currentLeadEmail};
 `;
 
 # Deactivate repo team leads for inactive organizations.

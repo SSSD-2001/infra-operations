@@ -168,7 +168,7 @@ public type DefaultAccessOrganization record {|
 # Response for GET default-repository-access.
 public type DefaultRepositoryAccessResponse record {|
     # Default access status: not_granted, granting, or granted
-    string status;
+    database:DefaultAccessStatus status;
     # Organizations and repos (empty when status is not granted)
     DefaultAccessOrganization[] organizations;
 |};
