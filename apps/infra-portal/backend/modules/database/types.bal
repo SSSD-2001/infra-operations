@@ -340,7 +340,10 @@ public type OrganizationDefaultRepository record {|
     # Team slug in the organization
     @sql:Column {name: "team_slug"}
     string teamSlug;
-    # Repository access type
-    @sql:Column {name: "access_type"}
-    string accessType;
+    # Employment type this row applies to
+    @sql:Column {name: "employment_type"}
+    string employmentType;
+    # Department this row applies to; null means every department of that employment type
+    @sql:Column {name: "department"}
+    string? department;
 |};

@@ -136,20 +136,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             }
         }
 
-        UserInfoResponse userInfoResponse = {
-            employeeId: loggedInUser.employeeId,
-            workEmail: loggedInUser.workEmail,
-            firstName: loggedInUser.firstName,
-            lastName: loggedInUser.lastName,
-            jobRole: loggedInUser.jobRole,
-            employeeThumbnail: loggedInUser.employeeThumbnail,
-            department: loggedInUser.department,
-            team: loggedInUser.team,
-            employmentType: loggedInUser.employmentType,
-            privileges,
-            githubUserId,
-            githubUsername
-        };
+        UserInfoResponse userInfoResponse = {...loggedInUser, privileges, githubUserId, githubUsername};
 
         error? cacheError = cache.put(userInfo.email, userInfoResponse);
         if cacheError is error {
@@ -1817,8 +1804,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        db:UserDefaultRepositoryAccess|error? result =
-            db:getUserDefaultRepositoryAccess(employee.employeeId);
+        db:UserDefaultRepositoryAccess|error? result = db:getUserDefaultRepositoryAccess(employee.employeeId);
         if result is error {
             string customError = "Error while reading default repository access!";
             log:printError(customError, result, employeeId = employee.employeeId);
@@ -1831,43 +1817,20 @@ service http:InterceptableService / on new http:Listener(8090) {
             return {status: result.status, organizations: []};
         }
 
-        gh:OrganizationAndTeam[] orgTeams = [];
-        if employee.employmentType == PERMANENT {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(types:PERMANENT);
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-
-            if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
-                db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType(types:CS);
-                if csRepos is error {
-                    string customError = "Error while reading default organization repositories!";
-                    log:printError(customError, csRepos);
-                    return <http:InternalServerError>{body: {message: customError}};
-                }
-                foreach db:OrganizationDefaultRepository row in csRepos {
-                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
-                }
-            }
-        } else if employee.employmentType == INTERNSHIP {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(types:INTERN);
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-        } else {
+        types:EmploymentType? employmentType = toDefaultRepoEmploymentType(employee.employmentType);
+        if employmentType is () {
             return {status: types:GRANTED, organizations: []};
         }
+
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from var row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         map<DefaultAccessRepository[]> reposByOrg = {};
         foreach gh:OrganizationAndTeam ot in orgTeams {
@@ -1971,41 +1934,8 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         string gitHubUserName = githubUser.login;
 
-        gh:OrganizationAndTeam[] orgTeams = [];
-        if employee.employmentType == PERMANENT {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(types:PERMANENT);
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-
-            if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
-                db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType(types:CS);
-                if csRepos is error {
-                    string customError = "Error while reading default organization repositories!";
-                    log:printError(customError, csRepos);
-                    return <http:InternalServerError>{body: {message: customError}};
-                }
-                foreach db:OrganizationDefaultRepository row in csRepos {
-                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
-                }
-            }
-        } else if employee.employmentType == INTERNSHIP {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType(types:INTERN);
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-        } else {
+        types:EmploymentType? employmentType = toDefaultRepoEmploymentType(employee.employmentType);
+        if employmentType is () {
             string actualType = employee.employmentType ?: "null";
             string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
             log:printError(customError, email = userInfo.email, employmentType = actualType);
@@ -2015,6 +1945,16 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from var row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         if orgTeams.length() == 0 {
             string customError = "No default organization repositories configured for this employment type!";
@@ -2134,5 +2074,19 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         return result;
     }
+}
 
+# Map an HR employment type to the value stored for default repository access.
+# HR returns "INTERNSHIP". The default-repository table stores "INTERN".
+#
+# + employmentType - Employment type from HR; nil when HR has none
+# + return - PERMANENT, INTERN, or nil when this employee gets no default access
+isolated function toDefaultRepoEmploymentType(string? employmentType) returns types:EmploymentType? {
+    if employmentType == PERMANENT {
+        return types:PERMANENT;
+    }
+    if employmentType == "INTERNSHIP" {
+        return types:INTERN;
+    }
+    return ();
 }
