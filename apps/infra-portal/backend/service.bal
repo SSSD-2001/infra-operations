@@ -1836,12 +1836,8 @@ service http:InterceptableService / on new http:Listener(8090) {
         foreach gh:OrganizationAndTeam ot in orgTeams {
             gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(ot.orgName, ot.teamSlug);
             if teamRepos is error {
-                log:printWarn(
-                    "Failed to list team repos; skipping team",
-                    teamRepos,
-                    org = ot.orgName,
-                    team = ot.teamSlug
-                );
+                log:printWarn("Failed to list team repos; skipping team", teamRepos,
+                    org = ot.orgName, team = ot.teamSlug);
                 continue;
             }
             if !reposByOrg.hasKey(ot.orgName) {
