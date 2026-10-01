@@ -1829,7 +1829,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             log:printError(customError, orgRepos);
             return <http:InternalServerError>{body: {message: customError}};
         }
-        gh:OrganizationAndTeam[] orgTeams = from var row in orgRepos
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
             select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         map<DefaultAccessRepository[]> reposByOrg = {};
@@ -1844,18 +1844,11 @@ service http:InterceptableService / on new http:Listener(8090) {
                 reposByOrg[ot.orgName] = [];
             }
             DefaultAccessRepository[] existing = reposByOrg.get(ot.orgName);
-            map<boolean> seen = {};
-            foreach DefaultAccessRepository r in existing {
-                seen[r.name] = true;
-            }
-            foreach gh:TeamRepository repo in teamRepos {
-                if seen.hasKey(repo.name) {
-                    continue;
-                }
-                seen[repo.name] = true;
-                existing.push({name: repo.name, htmlUrl: repo.htmlUrl});
-            }
-            reposByOrg[ot.orgName] = existing;
+            DefaultAccessRepository[] newRepos =
+                from gh:TeamRepository {name, htmlUrl} in teamRepos
+                where !existing.some(repo => repo.name == name)
+                select {name, htmlUrl};
+            reposByOrg[ot.orgName] = [...existing, ...newRepos];
         }
 
         DefaultAccessOrganization[] organizations = [];
@@ -1949,7 +1942,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             log:printError(customError, orgRepos);
             return <http:InternalServerError>{body: {message: customError}};
         }
-        gh:OrganizationAndTeam[] orgTeams = from var row in orgRepos
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
             select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         if orgTeams.length() == 0 {
