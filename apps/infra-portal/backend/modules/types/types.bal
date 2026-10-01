@@ -5,9 +5,8 @@ public enum DefaultAccessStatus {
     GRANTED = "granted"
 }
 
-# Access category stored in organizations_default_repositories.access_type.
-public enum RepoAccessType {
+# Employment type stored in organizations_default_repositories.employment_type.
+public enum EmploymentType {
     PERMANENT = "PERMANENT",
-    CS = "CS",
     INTERN = "INTERN"
 }

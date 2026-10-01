@@ -22,7 +22,7 @@ const string WSO2_ALL_TEAM_SLUG = "wso2-all";
 const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 const string READONLY_TEAM_SLUG = "wso2-readonly";
 
-# Employment type values as returned by the HR entity (uppercase enum-style).
+# Employment type values used for default repository access.
 const string PERMANENT = "PERMANENT";
-const string INTERNSHIP = "INTERNSHIP";
+const string INTERN = "INTERN";
 const string CUSTOMER_SUCCESS_DEPARTMENT = "CUSTOMER SUCCESS";

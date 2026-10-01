@@ -420,14 +420,15 @@ public isolated function getUserDefaultRepositoryAccess(string employeeId)
     return row;
 }
 
-# Get default org/team mappings for an access type.
+# Get default org/team mappings for an employment type and department.
 #
-# + accessType - Repository access type
+# + employmentType - Employment type
+# + department - Employee department; null selects only default rows
 # + return - Rows or error
-public isolated function getOrganizationDefaultRepositoriesByAccessType(types:RepoAccessType accessType)
+public isolated function getOrganizationDefaultRepositories(types:EmploymentType employmentType, string? department)
     returns OrganizationDefaultRepository[]|error {
     stream<OrganizationDefaultRepository, error?> resultStream =
-        databaseClient->query(getOrganizationDefaultRepositoriesByAccessTypeQuery(accessType));
+        databaseClient->query(getOrganizationDefaultRepositoriesQuery(employmentType, department));
     return from OrganizationDefaultRepository row in resultStream
         select row;
 }
