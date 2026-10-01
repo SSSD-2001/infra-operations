@@ -1817,10 +1817,11 @@ service http:InterceptableService / on new http:Listener(8090) {
             return {status: result.status, organizations: []};
         }
 
-        types:EmploymentType? employmentType = toDefaultRepoEmploymentType(employee.employmentType);
-        if employmentType is () {
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
             return {status: types:GRANTED, organizations: []};
         }
+        types:EmploymentType employmentType = rawEmploymentType;
 
         db:OrganizationDefaultRepository[]|error orgRepos =
             db:getOrganizationDefaultRepositories(employmentType, employee.department);
@@ -1922,9 +1923,9 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         string gitHubUserName = githubUser.login;
 
-        types:EmploymentType? employmentType = toDefaultRepoEmploymentType(employee.employmentType);
-        if employmentType is () {
-            string actualType = employee.employmentType ?: "null";
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
+            string actualType = rawEmploymentType ?: "null";
             string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
             log:printError(customError, email = userInfo.email, employmentType = actualType);
             return <http:InternalServerError>{
@@ -1933,6 +1934,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+        types:EmploymentType employmentType = rawEmploymentType;
 
         db:OrganizationDefaultRepository[]|error orgRepos =
             db:getOrganizationDefaultRepositories(employmentType, employee.department);
@@ -2062,19 +2064,4 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         return result;
     }
-}
-
-# Map an HR employment type to the value stored for default repository access.
-# HR returns "INTERNSHIP". The default-repository table stores "INTERN".
-#
-# + employmentType - Employment type from HR; nil when HR has none
-# + return - PERMANENT, INTERN, or nil when this employee gets no default access
-isolated function toDefaultRepoEmploymentType(string? employmentType) returns types:EmploymentType? {
-    if employmentType == PERMANENT {
-        return types:PERMANENT;
-    }
-    if employmentType == "INTERNSHIP" {
-        return types:INTERN;
-    }
-    return ();
 }
