@@ -1952,7 +1952,8 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        gh:AddOrUpdateTeamMemberInformationInput[] inputs = from var organizationAndTeam in orgTeams
+        gh:AddOrUpdateTeamMemberInformationInput[] inputs =
+            from gh:OrganizationAndTeam organizationAndTeam in orgTeams
             select {
                 orgName: organizationAndTeam.orgName,
                 teamSlug: organizationAndTeam.teamSlug,
@@ -1982,7 +1983,6 @@ service http:InterceptableService / on new http:Listener(8090) {
         types:DefaultAccessStatus status = membershipResult.failedMemberships.length() == 0 &&
             membershipResult.successfulMemberships.length() > 0 ? types:GRANTED : types:NOT_GRANTED;
         error? dbResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, status);
-        
         if dbResult is error {
             string customError = "Default access applied on GitHub, but failed to update access record in DB!";
             log:printError(customError, dbResult, employeeId = employee.employeeId);
