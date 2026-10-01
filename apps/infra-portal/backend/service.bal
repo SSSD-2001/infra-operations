@@ -1851,14 +1851,13 @@ service http:InterceptableService / on new http:Listener(8090) {
             reposByOrg[ot.orgName] = [...existing, ...newRepos];
         }
 
-        DefaultAccessOrganization[] organizations = [];
-        foreach string orgName in reposByOrg.keys() {
-            organizations.push({
-                orgName: orgName,
+        DefaultAccessOrganization[] organizations =
+            from [string, DefaultAccessRepository[]] [orgName, repositories] in reposByOrg.entries()
+            select {
+                orgName,
                 avatarUrl: string `https://github.com/${orgName}.png`,
-                repositories: reposByOrg.get(orgName)
-            });
-        }
+                repositories
+            };
         return {status: types:GRANTED, organizations};
     
     }
