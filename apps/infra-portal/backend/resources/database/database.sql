@@ -108,10 +108,10 @@ VALUES
   ("wso2-support", "wso2-support-readonly", "PERMANENT", NULL),
   ("wso2-cs", "cs-team", "PERMANENT", "CUSTOMER SUCCESS"),
   ("wso2-enterprise", "customer-success-team", "PERMANENT", "CUSTOMER SUCCESS"),
-  ("wso2", "wso2-all-interns", "INTERN", NULL),
-  ("wso2-extensions", "wso2-all-interns", "INTERN", NULL),
-  ("wso2-enterprise", "wso2-all-interns", "INTERN", NULL),
-  ("ballerina-platform", "wso2-all-interns", "INTERN", NULL);
+  ("wso2", "wso2-all-interns", "INTERNSHIP", NULL),
+  ("wso2-extensions", "wso2-all-interns", "INTERNSHIP", NULL),
+  ("wso2-enterprise", "wso2-all-interns", "INTERNSHIP", NULL),
+  ("ballerina-platform", "wso2-all-interns", "INTERNSHIP", NULL);
 
 CREATE TABLE IF NOT EXISTS user_default_repository_access (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,

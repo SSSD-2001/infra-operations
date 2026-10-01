@@ -6,7 +6,8 @@ public enum DefaultAccessStatus {
 }
 
 # Employment type stored in organizations_default_repositories.employment_type.
+# Values match the HR entity employment type.
 public enum EmploymentType {
-    PERMANENT = "PERMANENT",
-    INTERN = "INTERN"
+    PERMANENT,
+    INTERNSHIP
 }
