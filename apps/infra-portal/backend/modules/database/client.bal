@@ -21,7 +21,14 @@ import ballerinax/mysql.driver as _;
 configurable DatabaseConfig databaseConfig = ?;
 
 DatabaseClientConfig databaseClientConfig = {
-    ...databaseConfig,
+    host: databaseConfig.host,
+    user: databaseConfig.user,
+    password: databaseConfig.password,
+    database: databaseConfig.database,
+    port: databaseConfig.port,
+    connectionPool: {
+        ...databaseConfig.connectionPool
+    },
     options: {
         ssl: {
             mode: mysql:SSL_REQUIRED
@@ -31,16 +38,4 @@ DatabaseClientConfig databaseClientConfig = {
 };
 
 # Database Client.
-final mysql:Client databaseClient = check new (
-    host = databaseClientConfig.host,
-    user = databaseClientConfig.user,
-    password = databaseClientConfig.password,
-    database = databaseClientConfig.database,
-    port = databaseClientConfig.port,
-    options = databaseClientConfig.options,
-    connectionPool = {
-        maxOpenConnections: databaseClientConfig.connectionPool.maxOpenConnections,
-        minIdleConnections: databaseClientConfig.connectionPool.minIdleConnections,
-        maxConnectionLifeTime: databaseClientConfig.connectionPool.maxConnectionLifeTime
-    }
-);
+final mysql:Client databaseClient = check new (...databaseClientConfig);
