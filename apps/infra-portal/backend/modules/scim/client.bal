@@ -17,7 +17,7 @@
 import ballerina/http;
 
 configurable string scimOperationsServiceBaseUrl = ?;
-configurable http:ClientAuthConfig scimClientAuthConfig = ?;
+configurable ClientAuthConfig scimClientAuthConfig = ?;
 public configurable string asgardeoUserStoreDomain = "DEFAULT";
 
 @display {
@@ -25,7 +25,9 @@ public configurable string asgardeoUserStoreDomain = "DEFAULT";
     id: "scim/client"
 }
 final http:Client scimOperationsClient = check new (scimOperationsServiceBaseUrl, {
-    auth: scimClientAuthConfig,
+    auth: {
+        ...scimClientAuthConfig
+    },
     timeout: 15.0,
     httpVersion: http:HTTP_1_1,
     http1Settings: {
