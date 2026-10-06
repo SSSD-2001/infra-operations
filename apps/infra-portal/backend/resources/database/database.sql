@@ -94,10 +94,10 @@ CREATE TABLE IF NOT EXISTS organization_default_teams (
 
 CREATE TABLE IF NOT EXISTS organizations_default_repositories (
     id INT AUTO_INCREMENT PRIMARY KEY NOT NULL,
-    org_name VARCHAR(255) NOT NULL,
-    team_slug VARCHAR(255) NOT NULL,
-    employment_type VARCHAR(255) NOT NULL,
-    department VARCHAR(255) NULL DEFAULT NULL,
+    org_name VARCHAR(50) NOT NULL,
+    team_slug VARCHAR(100) NOT NULL,
+    employment_type VARCHAR(50) NOT NULL,
+    department VARCHAR(50) NULL DEFAULT NULL,
     UNIQUE KEY unique_org_team_employment (org_name, team_slug, employment_type, department)
 );
 
