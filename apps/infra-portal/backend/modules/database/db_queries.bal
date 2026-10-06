@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/sql;
+import infra_portal.types;
 
 # Query to get a specific repository request by id.
 #
@@ -762,3 +763,45 @@ isolated function deleteDefaultTeamQuery(int teamId) returns sql:ParameterizedQu
     WHERE 
         team_id = ${teamId};
     `;
+
+# Upsert user default repository access by employee id.
+#
+# + employeeId - HR employee id
+# + status - Status of the default access
+# + return - Parameterized upsert query
+isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, types:DefaultAccessStatus status)
+    returns sql:ParameterizedQuery => `
+    INSERT INTO user_default_repository_access (employee_id, status)
+    VALUES (${employeeId}, ${status})
+    ON DUPLICATE KEY UPDATE status = VALUES(status)
+`;
+
+# Get user default repository access by employee id.
+#
+# + employeeId - HR employee id
+# + return - Parameterized select query
+isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
+    returns sql:ParameterizedQuery => `
+    SELECT id, employee_id, status
+    FROM user_default_repository_access
+    WHERE employee_id = ${employeeId}
+`;
+
+# Get default org/team rows for an employment type.
+# A null department on the row applies to every department.
+# A set department applies only when it matches the employee.
+#
+# + employmentType - Employment type filter
+# + department - Employee department; null matches only the default rows
+# + return - Parameterized select query
+isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType employmentType, string? department)
+    returns sql:ParameterizedQuery => `
+    SELECT
+        org_name,
+        team_slug,
+        employment_type,
+        department
+    FROM organizations_default_repositories
+    WHERE employment_type = ${employmentType}
+        AND (department IS NULL OR department = ${department})
+`;

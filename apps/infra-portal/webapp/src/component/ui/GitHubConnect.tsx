@@ -13,145 +13,112 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
-
+import { Box, Button, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-import { GithubOAuthConfig } from "@config/config";
 import {
   GITHUB_OAUTH_STATE_KEY,
-  RESULT_KEY,
+  OAUTH_CALLBACK_STATE_KEY,
+  PENDING_OAUTH_CODE_KEY,
   STATE_EXPIRY_MS,
-  SnackMessage,
 } from "@config/constant";
-import { State } from "@root/src/types/types";
-import { connectGitHub } from "@slices/githubOauthAppSlice/githubOauth";
-import { useAppDispatch, useAppSelector } from "@slices/store";
-
-interface ConnectResult {
-  status: "verified" | "unverified" | "error";
-  githubUserId?: string;
-  githubUsername?: string;
-  errorMessage?: string;
-}
-
-interface StoredState {
-  state: string;
-  createdAt: number;
-}
-
-const navigateWithResult = (result: ConnectResult) => {
-  sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
-  window.location.href = "/github/repository-access-requests";
-};
+import {
+  DEFAULT_GITHUB_OAUTH_RETURN_PATH,
+  GitHubConnectResult,
+  GitHubOAuthStoredState,
+  consumeStoredGitHubConnectResult,
+  navigateWithGitHubConnectResult,
+  startGitHubOAuth,
+  stashPendingOAuthCode,
+} from "@utils/githubOAuth";
 
 export default function GitHubConnect() {
-  const githubConnectState = useAppSelector((state) => state.githubConnect);
-  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
 
-  const [storedResult, setStoredResult] = useState<ConnectResult | null>(() => {
-    const raw = sessionStorage.getItem(RESULT_KEY);
-    try {
-      if (raw) {
-        sessionStorage.removeItem(RESULT_KEY);
-        return JSON.parse(raw) as ConnectResult;
-      }
-    } catch {
-      sessionStorage.removeItem(RESULT_KEY);
-    }
-    return null;
-  });
+  const [storedResult, setStoredResult] = useState<GitHubConnectResult | null>(null);
+
+  // The read clears session storage, so it must run after render rather than during it.
+  useEffect(() => {
+    setStoredResult(consumeStoredGitHubConnectResult());
+  }, []);
 
   const handleRedirect = () => {
     setStoredResult(null);
-    const state = self.crypto.randomUUID();
-    const stateObj: StoredState = { state, createdAt: Date.now() };
-    sessionStorage.setItem(GITHUB_OAUTH_STATE_KEY, JSON.stringify(stateObj));
-    const params = new URLSearchParams({
-      client_id: GithubOAuthConfig.clientID,
-      scope: (GithubOAuthConfig.scope || []).join(" "),
-      state,
-      redirect_uri: GithubOAuthConfig.githubAuthRedirectUrl,
-    });
-    window.location.href = `${GithubOAuthConfig.oauthAuthorizationBaseUrl}?${params.toString()}`;
+    startGitHubOAuth(DEFAULT_GITHUB_OAUTH_RETURN_PATH);
   };
 
-  // Runs once on mount — reads directly from window.location to avoid React Router reactivity issues.
   useEffect(() => {
-    const handleCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const urlState = params.get("state");
+    const clearCallbackStorage = () => {
+      sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
+      sessionStorage.removeItem(PENDING_OAUTH_CODE_KEY);
+      sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
+    };
 
-      if (!code || !urlState) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = sessionStorage.getItem(PENDING_OAUTH_CODE_KEY) || params.get("code");
+    const urlState = sessionStorage.getItem(OAUTH_CALLBACK_STATE_KEY) || params.get("state");
 
-      // Parse stored state
-      const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
-      let storedObj: StoredState | null = null;
-      try {
-        if (rawStoredState) storedObj = JSON.parse(rawStoredState) as StoredState;
-      } catch {
-        // invalid JSON — treat as missing
-      }
+    if (!code) return;
 
-      // Validate expiry
-      if (!storedObj || Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
-        sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        navigateWithResult({
+    const rawStoredState = sessionStorage.getItem(GITHUB_OAUTH_STATE_KEY);
+    let storedObj: GitHubOAuthStoredState | null = null;
+    try {
+      if (rawStoredState) storedObj = JSON.parse(rawStoredState) as GitHubOAuthStoredState;
+    } catch {
+      storedObj = null;
+    }
+
+    const returnPath = storedObj?.returnPath || "/";
+
+    // A code without a matching state cannot be trusted, so never exchange it.
+    if (!urlState || !storedObj) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
+          status: "error",
+          errorMessage:
+            "Security validation failed: authentication state missing. Please try again.",
+        },
+        navigate,
+      );
+      return;
+    }
+
+    if (Date.now() - storedObj.createdAt > STATE_EXPIRY_MS) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
           status: "error",
           errorMessage: "Session expired: the connection request took too long. Please try again.",
-        });
-        return;
-      }
+        },
+        navigate,
+      );
+      return;
+    }
 
-      // Validate CSRF
-      if (urlState !== storedObj.state) {
-        sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-        navigateWithResult({
+    if (urlState !== storedObj.state) {
+      clearCallbackStorage();
+      navigateWithGitHubConnectResult(
+        returnPath,
+        {
           status: "error",
           errorMessage:
             "Security validation failed: authentication state mismatch. Please try again.",
-        });
-        return;
-      }
-
-      // Nonce consumed — remove before dispatching
-      sessionStorage.removeItem(GITHUB_OAUTH_STATE_KEY);
-
-      // Await the thunk so we read the settled result, not stale Redux state
-      const result = await dispatch(connectGitHub({ code }));
-
-      if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
-        navigateWithResult({
-          status: "verified",
-          githubUserId: result.payload.githubUserId,
-          githubUsername: result.payload.githubUsername,
-        });
-      } else if (connectGitHub.fulfilled.match(result)) {
-        navigateWithResult({
-          status: "unverified",
-          errorMessage: SnackMessage.error.githubUnverifiedMessage,
-        });
-      } else {
-        navigateWithResult({
-          status: "error",
-          errorMessage: SnackMessage.error.githubConnectMessage,
-        });
-      }
-    };
-
-    void handleCallback();
-  }, [dispatch]);
-
-  // Show spinner while any async operation is in flight or settling (pre-navigation flash guard)
-  if (githubConnectState.state !== State.idle && !storedResult) return <CircularProgress />;
-
-  if (storedResult) {
-    if (storedResult.status === "verified") {
-      return (
-        <Typography color="success.main">Connected as @{storedResult.githubUsername}</Typography>
+        },
+        navigate,
       );
+      return;
     }
+
+    stashPendingOAuthCode(code);
+    sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
+    navigate(returnPath, { replace: true });
+  }, [navigate]);
+
+  if (storedResult && storedResult.status !== "verified") {
     return (
       <Box>
         <Typography color="error.main">{storedResult.errorMessage}</Typography>
@@ -160,12 +127,5 @@ export default function GitHubConnect() {
     );
   }
 
-  return (
-    <Box>
-      <Typography variant="body2">
-        Before connecting, ensure your employee email is added and verified on your GitHub account.
-      </Typography>
-      <Button onClick={handleRedirect}>Connect with GitHub</Button>
-    </Box>
-  );
+  return null;
 }

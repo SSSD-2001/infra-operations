@@ -16,6 +16,7 @@
 
 import ballerina/sql;
 import ballerinax/mysql;
+import infra_portal.types;
 
 # Database connection pool settings exposed as configurables.
 type DatabaseConnectionPoolConfig record {|
@@ -327,3 +328,32 @@ public type Team record {
     # The slug of the team to add to the repository
     string permission;
 };
+
+# Record for user default repository access tracking.
+public type UserDefaultRepositoryAccess record {|
+    # Auto-increment primary key
+    @sql:Column {name: "id"}
+    int id;
+    # HR employee id
+    @sql:Column {name: "employee_id"}
+    string employeeId;
+    # Default access status
+    @sql:Column {name: "status"}
+    types:DefaultAccessStatus status;
+|};
+
+# Row from organizations_default_repositories.
+public type OrganizationDefaultRepository record {|
+    # GitHub organization login
+    @sql:Column {name: "org_name"}
+    string orgName;
+    # Team slug in the organization
+    @sql:Column {name: "team_slug"}
+    string teamSlug;
+    # Employment type this row applies to
+    @sql:Column {name: "employment_type"}
+    string employmentType;
+    # Department this row applies to; null means every department of that employment type
+    @sql:Column {name: "department"}
+    string? department;
+|};

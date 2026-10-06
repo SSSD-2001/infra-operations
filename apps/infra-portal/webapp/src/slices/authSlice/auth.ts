@@ -30,6 +30,7 @@ export enum Role {
 // Custom extended interface
 interface ExtendedDecodedIDTokenPayload extends DecodedIDTokenPayload {
   groups?: string[];
+  githubUserId?: string;
 }
 
 interface AuthState {
@@ -61,6 +62,7 @@ export interface UserInfoInterface {
   employeeThumbnail: string | null;
   jobRole: string;
   privileges: number[];
+  githubUsername?: string | null;
 }
 
 const initialState: AuthState = {

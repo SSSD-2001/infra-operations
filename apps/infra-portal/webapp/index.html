@@ -31,6 +31,31 @@ under the License.
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <script>
+      (function () {
+        if (window.location.pathname !== "/github/callback") return;
+        var params = new URLSearchParams(window.location.search);
+        var code = params.get("code");
+        var state = params.get("state");
+        if (!code || !state) return;
+    
+        sessionStorage.setItem("gh_pending_oauth_code", code);
+        sessionStorage.setItem("gh_oauth_callback_state", state);
+    
+        var returnPath = "/";
+        try {
+          var raw = sessionStorage.getItem("gh_oauth_state");
+          if (raw) {
+            var obj = JSON.parse(raw);
+            var candidate = obj && obj.returnPath;
+            if (typeof candidate === "string" && /^\/(?!\/)/.test(candidate)) {
+              returnPath = candidate;
+            }
+          }
+        } catch (e) {}
+            window.location.replace(returnPath);
+      })();
+    </script>
     <script src="/config.js"></script>
     <script type="module" src="./src/main.tsx"></script>
   </body>

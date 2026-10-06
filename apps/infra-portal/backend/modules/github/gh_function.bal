@@ -14,10 +14,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/cache;
 import ballerina/http;
 import ballerina/io;
 import ballerina/lang.array;
 import ballerina/lang.value;
+import ballerina/log;
+
+final cache:Cache githubUserCache = new ({
+    capacity: 2000,
+    defaultMaxAge: GITHUB_USER_CACHE_MAX_AGE,
+    cleanupInterval: 3600.0
+});
+
 
 # Checks whether the organization can be accessed.
 #
@@ -53,7 +62,6 @@ public isolated function getInternalCommitterTeams(string orgName) returns strin
     http:Client githubClient = check createGithubClient();
     GitHubTeam[] allTeams = [];
     int page = 1;
-
     while true {
         GitHubTeam[] pageTeams = check githubClient->/orgs/[orgName]/teams/[INTERNAL_COMMITTER_TEAM_SLUG]/teams(
             perPage = DEFAULT_LIMIT, page = page
@@ -64,7 +72,6 @@ public isolated function getInternalCommitterTeams(string orgName) returns strin
         }
         page += 1;
     }
-
     return from var team in allTeams
         where team.slug.includes(INTERNAL_COMMITTER_FORMAT)
         select team.slug;
@@ -490,9 +497,46 @@ public isolated function addOrUpdateTeamMemberships(AddOrUpdateTeamMemberInforma
 # + githubUserId - GitHub account ID
 # + return - GitHub user details or error
 public isolated function getUserDetails(string githubUserId) returns GitHubUser|error {
+    if githubUserCache.hasKey(githubUserId) {
+        GitHubUser|error cached = githubUserCache.get(githubUserId).ensureType();
+        if cached is GitHubUser {
+            return cached;
+        }
+    }
+
     http:Client|error githubClient = createGithubClient();
     if githubClient is error {
         return githubClient;
     }
-    return githubClient->/github/user.get(accountId = githubUserId);
+    GitHubUser|error githubUser = githubClient->/github/user.get(accountId = githubUserId);
+    if githubUser is GitHubUser {
+        error? cacheError = githubUserCache.put(githubUserId, githubUser);
+        if cacheError is error {
+            log:printWarn("Failed to cache GitHub user details", cacheError, githubUserId = githubUserId);
+        }
+    }
+    return githubUser;
+}
+
+# List every repository for a team.
+#
+# + orgName - Organization login
+# + teamSlug - Team slug
+# + return - Repositories or error
+public isolated function getTeamRepositories(string orgName, string teamSlug) returns TeamRepository[]|error {
+    http:Client githubClient = check createGithubClient();
+    TeamRepository[] allRepos = [];
+    int page = 1;
+
+    while true {
+        TeamRepository[] pageRepos = check githubClient->/orgs/[orgName]/teams/[teamSlug]/repos.get(
+            perPage = DEFAULT_LIMIT, page = page
+        );
+        allRepos.push(...pageRepos);
+        if pageRepos.length() < DEFAULT_LIMIT {
+            break;
+        }
+        page += 1;
+    }
+    return allRepos;
 }

@@ -29,6 +29,9 @@ public const decimal RETRY_MAX_INTERVAL = 20.0;
 # Default limit for the entity.
 public const int DEFAULT_LIMIT = 100;
 
+# GitHub user details are cached for 6 hours. The username rarely changes.
+public const decimal GITHUB_USER_CACHE_MAX_AGE = 21600.0;
+
 # Internal committer team slug.
 const string INTERNAL_COMMITTER_TEAM_SLUG = "wso2-internal-committers";
 
@@ -43,23 +46,3 @@ const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 
 # Readonly team slug.
 const string READONLY_TEAM_SLUG = "wso2-readonly";
-
-// - **wso2-support** > `wso2-support-readonly`
-// - **wso2** > `wso2-readonly`
-// - **wso2-extensions** > `wso2-readonly`
-# Default team access for the organization and team combinations.
-public final readonly & OrganizationAndTeam[] PERMANENT_DEFAULT_TEAM_ACCESS = [
-    {orgName: "wso2-support", teamSlug: "wso2-support-readonly"},
-    {orgName: "wso2", teamSlug: "wso2-readonly"},
-    {orgName: "wso2-extensions", teamSlug: "wso2-readonly"}
-];
-
-// - **wso2-cs** > `cs-team`
-// - **wso2-enterprise** > `customer-success-team`
-# Customer success team access for the organization and team combinations.
-public final readonly & OrganizationAndTeam[] CS_TEAM_ACCESS = [
-    {orgName: "wso2-cs", teamSlug: "cs-team"},
-    {orgName: "wso2-enterprise", teamSlug: "customer-success-team"}
-];
-
-public const string[] INTERNS_DEFAULT_ORGANIZATIONS = ["wso2-support", "wso2", "wso2-extensions", "ballerina-platform"];

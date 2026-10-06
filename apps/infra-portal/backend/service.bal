@@ -19,6 +19,7 @@ import infra_portal.email;
 import infra_portal.entity;
 import infra_portal.github as gh;
 import infra_portal.scim;
+import infra_portal.types;
 
 import ballerina/cache;
 import ballerina/http;
@@ -122,16 +123,28 @@ service http:InterceptableService / on new http:Listener(8090) {
             privileges.push(authorization:ADMIN_PRIVILEGE);
         }
 
-        UserInfoResponse userInfoResponse = {...loggedInUser, privileges};
+        string? githubUserId = userInfo.githubUserId;
+        string? githubUsername = ();
+        if githubUserId is string {
+            gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
+            if githubUser is error {
+                // The GitHub username is supplementary, so degrade instead of failing the profile.
+                log:printWarn("Error while fetching GitHub username for user-info!",
+                        'error = githubUser, email = userInfo.email);
+            } else {
+                githubUsername = githubUser.login;
+            }
+        }
+
+        UserInfoResponse userInfoResponse = {...loggedInUser, privileges, githubUserId, githubUsername};
 
         error? cacheError = cache.put(userInfo.email, userInfoResponse);
         if cacheError is error {
-            log:printError("An error occurred while writing user info to the cache", cacheError);
+            log:printWarn("An error occurred while writing user info to the cache", cacheError);
         }
 
         return userInfoResponse;
     }
-
     # Fetch employee information.
     #
     # + ctx - Request object
@@ -1761,6 +1774,94 @@ service http:InterceptableService / on new http:Listener(8090) {
         return teams;
     }
 
+    # Get default repository access status and org/repo list for the current user.
+    #
+    # + return - status + organizations/repos, or error
+    isolated resource function get default\-repository\-access(http:RequestContext ctx)
+        returns DefaultRepositoryAccessResponse|http:Forbidden|http:InternalServerError {
+
+        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
+        if userInfo is error {
+            return <http:InternalServerError>{
+                body: {message: "User information header not found!"}
+            };
+        }
+        if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
+            return <http:Forbidden>{
+                body: {message: "Insufficient privileges!"}
+            };
+        }
+
+        entity:Employee|error? employee = entity:fetchEmployeesBasicInfo(userInfo.email);
+        if employee is error {
+            string customError = "Error while fetching employee information!";
+            log:printError(customError, employee, email = userInfo.email);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        if employee is () {
+            string customError = "Employee information not found for the employee!";
+            log:printError(customError, email = userInfo.email);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+
+        db:UserDefaultRepositoryAccess|error? result = db:getUserDefaultRepositoryAccess(employee.employeeId);
+        if result is error {
+            string customError = "Error while reading default repository access!";
+            log:printError(customError, result, employeeId = employee.employeeId);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        if result is () {
+            return {status: types:NOT_GRANTED, organizations: []};
+        }
+        if result.status != types:GRANTED {
+            return {status: result.status, organizations: []};
+        }
+
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
+            return {status: types:GRANTED, organizations: []};
+        }
+        types:EmploymentType employmentType = rawEmploymentType;
+
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
+
+        map<DefaultAccessRepository[]> reposByOrg = {};
+        foreach gh:OrganizationAndTeam ot in orgTeams {
+            gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(ot.orgName, ot.teamSlug);
+            if teamRepos is error {
+                log:printWarn("Failed to list team repos; skipping team", teamRepos,
+                    org = ot.orgName, team = ot.teamSlug);
+                continue;
+            }
+            if !reposByOrg.hasKey(ot.orgName) {
+                reposByOrg[ot.orgName] = [];
+            }
+            DefaultAccessRepository[] existing = reposByOrg.get(ot.orgName);
+            DefaultAccessRepository[] newRepos =
+                from gh:TeamRepository {name, htmlUrl} in teamRepos
+                where !existing.some(repo => repo.name == name)
+                select {name, htmlUrl};
+            reposByOrg[ot.orgName] = [...existing, ...newRepos];
+        }
+
+        DefaultAccessOrganization[] organizations =
+            from [string, DefaultAccessRepository[]] [orgName, repositories] in reposByOrg.entries()
+            select {
+                orgName,
+                avatarUrl: string `https://github.com/${orgName}.png`,
+                repositories
+            };
+        return {status: types:GRANTED, organizations};
+    
+    }
     # Set default repository access for a GitHub user based on their employment type and department.
     #
     # + return - List of successful responses and failed responses or error
@@ -1803,82 +1904,102 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        string? gitHubUserId = userInfo.githubUserId;
-        if gitHubUserId is () {
+        string? githubUserId = userInfo.githubUserId;
+        if githubUserId is () {
             return <http:Forbidden>{
                 body: {message: "GitHub account is not verified."}
             };
         }
 
-        gh:AddOrUpdateTeamMemberResponse|error result
-            = error("No team membership changes made as the employment type does not match any criteria.");
-
-        gh:GitHubUser|error gitHubUser = gh:getUserDetails(gitHubUserId);
-        if gitHubUser is error {
-            string customError = "Error while fetching GitHub user details!";
-            log:printError(customError, gitHubUser);
+        gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
+        if githubUser is error {
+            string customError = "Error while resolving GitHub username!";
+            log:printError(customError, githubUser, email = userInfo.email);
             return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
             };
         }
+        string gitHubUserName = githubUser.login;
 
-        string gitHubUserName = gitHubUser.login;
-        if employee.employmentType is PERMANENT {
-            gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from gh:OrganizationAndTeam organizationAndTeam in gh:PERMANENT_DEFAULT_TEAM_ACCESS
-                select {
-                    orgName: organizationAndTeam.orgName,
-                    teamSlug: organizationAndTeam.teamSlug,
-                    userName: gitHubUserName,
-                    role: gh:MEMBER
-                };
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
+            string actualType = rawEmploymentType ?: "null";
+            string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
+            log:printError(customError, email = userInfo.email, employmentType = actualType);
+            return <http:InternalServerError>{
+                body: {
+                    message: customError
+                }
+            };
+        }
+        types:EmploymentType employmentType = rawEmploymentType;
 
-            if employee.department is CUSTOMER_SUCCESS_DEPARTMENT {
-                gh:AddOrUpdateTeamMemberInformationInput[] customerSuccessInputs
-                    = from gh:OrganizationAndTeam organizationAndTeam in gh:CS_TEAM_ACCESS
-                    select {
-                        orgName: organizationAndTeam.orgName,
-                        teamSlug: organizationAndTeam.teamSlug,
-                        userName: gitHubUserName,
-                        role: gh:MEMBER
-                    };
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
 
-                inputs.push(...customerSuccessInputs);
+        if orgTeams.length() == 0 {
+            string customError = "No default organization repositories configured for this employment type!";
+            log:printError(customError, email = userInfo.email, employmentType = employee.employmentType);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+
+        gh:AddOrUpdateTeamMemberInformationInput[] inputs =
+            from gh:OrganizationAndTeam organizationAndTeam in orgTeams
+            select {
+                orgName: organizationAndTeam.orgName,
+                teamSlug: organizationAndTeam.teamSlug,
+                userName: gitHubUserName,
+                role: gh:MEMBER
+            };
+
+        error? grantingResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:GRANTING);
+        if grantingResult is error {
+            string customError = "Error while updating default repository access status!";
+            log:printError(customError, grantingResult, employeeId = employee.employeeId);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+
+        gh:AddOrUpdateTeamMemberResponse|error membershipResult = gh:addOrUpdateTeamMemberships(inputs);
+        if membershipResult is error {
+        error? resetResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:NOT_GRANTED);
+            if resetResult is error {
+                log:printError("Failed to reset default access status after GitHub error", resetResult,
+                    employeeId = employee.employeeId);
             }
-            result = gh:addOrUpdateTeamMemberships(inputs);
-        }
-        if employee.employmentType is INTERNSHIP {
-            gh:AddOrUpdateTeamMemberInformationInput[] inputs
-                = from string organization in gh:INTERNS_DEFAULT_ORGANIZATIONS
-                select {
-                    orgName: organization,
-                    teamSlug: WSO2_ALL_INTERNS_TEAM_SLUG,
-                    userName: gitHubUserName,
-                    role: gh:MEMBER
-                };
-
-            result = gh:addOrUpdateTeamMemberships(inputs);
-        }
-
-        if result is error {
             string customError = "Error while adding/updating team membership for the employee!";
-            log:printError(customError, result);
+            log:printError(customError, membershipResult);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+
+        types:DefaultAccessStatus status = membershipResult.failedMemberships.length() == 0 &&
+            membershipResult.successfulMemberships.length() > 0 ? types:GRANTED : types:NOT_GRANTED;
+        error? dbResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, status);
+        if dbResult is error {
+            string customError = "Default access applied on GitHub, but failed to update access record in DB!";
+            log:printError(customError, dbResult, employeeId = employee.employeeId);
             return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
             };
         }
-        return result;
-    }
 
+        return membershipResult;
+    }
     # Exchange the authorization code for an access token.
     #
     # + payload - The authorization code received from GitHub after user authorization
     # + return - Access token or error
-    isolated resource function post github/verify\-email(http:RequestContext ctx, VerifyEmailPayload payload)
+    isolated resource function post github/verify\-and\-persist\-user(http:RequestContext ctx, VerifyEmailPayload payload)
         returns gh:EmailVerificationResponse|http:Forbidden|http:InternalServerError {
 
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
@@ -1896,6 +2017,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+
         gh:EmailVerificationResponse|error result
             = gh:verifyCompanyEmail({code: payload.code, email: userInfo.email});
 
@@ -1915,15 +2037,14 @@ service http:InterceptableService / on new http:Listener(8090) {
                     = scim:updateGithubUserId(githubUserId = githubUserId, email = userInfo.email);
 
             if updatedUser is error {
-                string customError = "Error while updating GitHub user ID for the user!";
-                log:printError(customError, updatedUser);
+                string customError = "Error while updating GitHub user ID in the IDP!";
+                log:printError(customError, updatedUser, email = userInfo.email);
                 return <http:InternalServerError>{
                     body: {
                         message: customError
                     }
                 };
-            }
-            if updatedUser is () {
+            } else if updatedUser is () {
                 string customError = "User not found for the email!";
                 log:printError(customError, email = userInfo.email);
                 return <http:InternalServerError>{
@@ -1932,8 +2053,15 @@ service http:InterceptableService / on new http:Listener(8090) {
                     }
                 };
             }
+
+            // Invalidate the cached user info so the next fetch reflects the newly linked GitHub account.
+            cache:Error? cacheInvalidateError = cache.invalidate(userInfo.email);
+            if cacheInvalidateError is cache:Error {
+                log:printWarn(
+                        "An error occurred while invalidating cached user info", cacheInvalidateError,
+                        email = userInfo.email);
+            }
         }
         return result;
     }
-
 }
