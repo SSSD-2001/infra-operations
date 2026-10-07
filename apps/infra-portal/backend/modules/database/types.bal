@@ -353,7 +353,7 @@ public type OrganizationDefaultRepository record {|
     # Employment type this row applies to
     @sql:Column {name: "employment_type"}
     string employmentType;
-    # Department this row applies to; null means every department of that employment type
+    # Department this row applies to; empty string means every department of that employment type
     @sql:Column {name: "department"}
     string? department;
 |};

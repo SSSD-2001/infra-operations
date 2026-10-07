@@ -788,11 +788,11 @@ isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
 `;
 
 # Get default org/team rows for an employment type.
-# A null department on the row applies to every department.
+# An empty department on the row applies to every department.
 # A set department applies only when it matches the employee.
 #
 # + employmentType - Employment type filter
-# + department - Employee department; null matches only the default rows
+# + department - Employee department; null or empty matches only the default rows
 # + return - Parameterized select query
 isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType employmentType, string? department)
     returns sql:ParameterizedQuery => `
@@ -803,5 +803,5 @@ isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType e
         department
     FROM organizations_default_repositories
     WHERE employment_type = ${employmentType}
-        AND (department IS NULL OR department = ${department})
+        AND (department = '' OR department = ${department})
 `;

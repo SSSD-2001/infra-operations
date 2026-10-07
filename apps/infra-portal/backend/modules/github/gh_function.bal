@@ -27,7 +27,6 @@ final cache:Cache githubUserCache = new ({
     cleanupInterval: 3600.0
 });
 
-
 # Checks whether the organization can be accessed.
 #
 # + orgName - Name of the organization

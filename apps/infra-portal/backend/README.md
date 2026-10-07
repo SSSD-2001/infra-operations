@@ -7,13 +7,13 @@ org/team memberships based on HR employment type, and `GET /default-repository-a
 resulting status and repository list.
 
 The org/team mappings are read at runtime from the `organizations_default_repositories` table via
-`db:getOrganizationDefaultRepositoriesByAccessType(...)`, which is the single source of truth:
+`db:getOrganizationDefaultRepositories(...)`, which is the single source of truth:
 
-| `access_type` | Who it applies to |
-| --- | --- |
-| `PERMANENT` | Permanent employees |
-| `CS` | Permanent employees in Customer Success (granted **in addition to** `PERMANENT`) |
-| `INTERN` | Interns |
+| `employment_type` | `department` | Who it applies to |
+| --- | --- | --- |
+| `PERMANENT` | empty | Permanent employees |
+| `PERMANENT` | `CUSTOMER SUCCESS` | Permanent employees in Customer Success (granted **in addition to** the empty-department rows) |
+| `INTERNSHIP` | empty | Interns |
 
 Per-user progress is tracked in `user_default_repository_access.status`, which is one of
 `not_granted`, `granting` or `granted`. A grant is only recorded as `granted` when every team
@@ -28,11 +28,11 @@ membership call fails:
 ```sql
 DELETE FROM organizations_default_repositories;
 
-INSERT INTO organizations_default_repositories (org_name, team_slug, access_type)
+INSERT INTO organizations_default_repositories (org_name, team_slug, employment_type, department)
 VALUES
-  ("your-test-org", "your-readonly-team", "PERMANENT"),
-  ("your-cs-test-org", "your-cs-team", "CS"),
-  ("your-test-org", "your-interns-team", "INTERN");
+  ("your-test-org", "your-readonly-team", "PERMANENT", ""),
+  ("your-cs-test-org", "your-cs-team", "PERMANENT", "CUSTOMER SUCCESS"),
+  ("your-test-org", "your-interns-team", "INTERNSHIP", "");
 ```
 
 The token used for these calls comes from the entity service `gitHubAccessTokens` configuration,
