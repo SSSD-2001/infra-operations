@@ -82,6 +82,7 @@ export const AppConfig = {
     comments: (requestId: number) => `${ServiceBaseUrl}/repository-requests/${requestId}/comments`,
     defaultTeams: ServiceBaseUrl + "/default-teams",
 
+    githubOAuthState: ServiceBaseUrl + "/github/oauth-state",
     githubVerifyAndPersistUser: ServiceBaseUrl + "/github/verify-and-persist-user",
     setDefaultRepositoryAccess: ServiceBaseUrl + "/set-default-repository-access",
     defaultRepositoryAccess: ServiceBaseUrl + "/default-repository-access",

@@ -192,12 +192,17 @@ export const addRepositoryRequests = createAsyncThunk<
   },
 );
 
-export const rejectRepositoryRequest = createAsyncThunk<void, number, { rejectValue: string }>(
+export const rejectRepositoryRequest = createAsyncThunk<
+  void,
+  { id: number; commentText: string },
+  { rejectValue: string }
+>(
   "repositoryRequest/rejectRepositoryRequest",
-  async (id: number, { dispatch, rejectWithValue }) => {
+  async ({ id, commentText }, { dispatch, rejectWithValue }) => {
     try {
       const response = await APIService.getInstance().patch(
         `${AppConfig.serviceUrls.repositoryRequests}/${id}/reject`,
+        { commentText },
       );
       dispatch(
         enqueueSnackbarMessage({

@@ -33,7 +33,7 @@ public isolated function getRepositoryRequest(int id) returns RepositoryRequest|
 public isolated function getRepositoryRequests(RepositoryRequestFilter filter) returns RepositoryRequest[]|error {
 
     stream<RepositoryRequest, error?> resultStream = databaseClient->query(getRepositoryRequestsQuery(filter.memberEmail,
-        filter.leadEmail, filter.'limit, filter.offset, filter.repoName, filter.approvalState));
+        filter.leadEmail, filter.'limit, filter.offset, filter.repoName, filter.approvalState, filter.callerEmail));
 
     return from RepositoryRequest repositoryRequest in resultStream
         select repositoryRequest;

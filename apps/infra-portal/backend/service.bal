@@ -24,6 +24,8 @@ import infra_portal.types;
 import ballerina/cache;
 import ballerina/http;
 import ballerina/log;
+import ballerina/sql;
+import ballerina/uuid;
 
 configurable SecurityDashboardLinks securityDashboardLinks = ?;
 
@@ -286,6 +288,11 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
+        string? callerEmail = ();
+        if !authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
+            callerEmail = userInfo.email;
+        }
+
         db:RepositoryRequest[]|error repoRequests =
             db:getRepositoryRequests({
                                          memberEmail: memberEmail,
@@ -293,7 +300,8 @@ service http:InterceptableService / on new http:Listener(8090) {
                                          approvalState: approvalState,
                                          'limit: 'limit,
                                          offset: offset,
-                                         repoName: repoName
+                                         repoName: repoName,
+                                         callerEmail: callerEmail
                                      });
 
         if repoRequests is error {
@@ -367,6 +375,13 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+        if !canReadRepositoryRequest(userInfo, repoRequest) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
 
         return repoRequest;
     }
@@ -376,7 +391,7 @@ service http:InterceptableService / on new http:Listener(8090) {
     # + request - repository request object
     # + return - http:Created or http error
     resource function post repository\-requests(http:RequestContext ctx, db:RepositoryRequestCreate request)
-        returns http:Created|http:Forbidden|http:InternalServerError {
+        returns http:Created|http:Forbidden|http:BadRequest|http:InternalServerError {
 
         log:printDebug("Adding a new repository request");
 
@@ -396,6 +411,16 @@ service http:InterceptableService / on new http:Listener(8090) {
                     message: "Insufficient privileges!"
                 }
             };
+        }
+
+        request.email = userInfo.email;
+        http:BadRequest|http:InternalServerError? leadError = validateLeadEmail(request.leadEmail);
+        if leadError is http:BadRequest|http:InternalServerError {
+            return leadError;
+        }
+        http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(request.organizationId, request.repoType);
+        if typeError is http:BadRequest|http:InternalServerError {
+            return typeError;
         }
 
         db:RepositoryRequest|error response = db:insertRepositoryRequest(request);
@@ -422,7 +447,7 @@ service http:InterceptableService / on new http:Listener(8090) {
     # + updatedData - repository request object
     # + return - http:NoContent or error
     resource function patch repository\-requests/[int id](http:RequestContext ctx, db:RepositoryRequestUpdate
-            updatedData) returns http:Ok|http:Forbidden|http:InternalServerError|http:NotFound {
+            updatedData) returns http:Ok|http:Forbidden|http:BadRequest|http:InternalServerError|http:NotFound {
 
         log:printDebug(string `Updating repository request with ID: ${id}`);
 
@@ -462,6 +487,26 @@ service http:InterceptableService / on new http:Listener(8090) {
                     message: customError
                 }
             };
+        }
+        if oldRepoRequest.state != db:PENDING || userInfo.email != oldRepoRequest.email {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
+        string? updatedLeadEmail = updatedData.lead_email;
+        if updatedLeadEmail is string {
+            http:BadRequest|http:InternalServerError? leadError = validateLeadEmail(updatedLeadEmail);
+            if leadError is http:BadRequest|http:InternalServerError {
+                return leadError;
+            }
+        }
+        int organizationId = updatedData.organizationId ?: oldRepoRequest.organizationId;
+        string repoType = updatedData.repoType ?: oldRepoRequest.repoType;
+        http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(organizationId, repoType);
+        if typeError is http:BadRequest|http:InternalServerError {
+            return typeError;
         }
 
         error? result = db:updateRepositoryRequest(id, updatedData);
@@ -507,8 +552,8 @@ service http:InterceptableService / on new http:Listener(8090) {
     #
     # + id - ID of the repository request
     # + return - http:NoContent or error
-    resource function patch repository\-requests/[int id]/reject(http:RequestContext ctx)
-        returns http:Ok|http:Forbidden|http:InternalServerError|http:NotFound {
+    resource function patch repository\-requests/[int id]/reject(http:RequestContext ctx, RejectRequest payload)
+        returns http:Ok|http:Forbidden|http:BadRequest|http:InternalServerError|http:NotFound {
 
         log:printDebug(string `Rejecting repository request with ID: ${id}`);
 
@@ -546,6 +591,37 @@ service http:InterceptableService / on new http:Listener(8090) {
             string customError = string `No repository request found with ID: ${id}`;
             log:printError(customError);
             return <http:NotFound>{
+                body: {
+                    message: customError
+                }
+            };
+        }
+        if !canReviewRepositoryRequest(userInfo, repositoryRequest) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
+        if repositoryRequest.state != db:PENDING {
+            return <http:BadRequest>{
+                body: {
+                    message: "Repository request is not pending!"
+                }
+            };
+        }
+        if payload.commentText.trim().length() == 0 {
+            return <http:BadRequest>{
+                body: {
+                    message: "A rejection comment is required."
+                }
+            };
+        }
+        error? commentResult = db:addRepositoryRequestComment(id, userInfo.email, payload.commentText);
+        if commentResult is error {
+            string customError = "Error while adding comment!";
+            log:printError(customError, commentResult);
+            return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
@@ -620,6 +696,13 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+        if !canReviewRepositoryRequest(userInfo, repoRequest) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
         // check if the repository request is already approved
         if repoRequest.state == db:APPROVED {
             string customError = "Repository Request is already approved!";
@@ -638,6 +721,18 @@ service http:InterceptableService / on new http:Listener(8090) {
                     message: customError
                 }
             };
+        }
+        if repoRequest.state != db:PENDING {
+            return <http:BadRequest>{
+                body: {
+                    message: "Repository request is not pending!"
+                }
+            };
+        }
+        http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(repoRequest.organizationId,
+                repoRequest.repoType);
+        if typeError is http:BadRequest|http:InternalServerError {
+            return typeError;
         }
 
         // create the repository in github
@@ -707,17 +802,6 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        error? result = db:addRepositoryRequestComment(id, comment.authorEmail, comment.commentText);
-        if result is error {
-            string customError = "Error while adding comment!";
-            log:printError(customError, result);
-            return <http:InternalServerError>{
-                body: {
-                    message: customError
-                }
-            };
-        }
-
         db:RepositoryRequest|error? repoRequest = db:getRepositoryRequest(id);
         if repoRequest is error {
             string customError = "Error while retrieving repository request!";
@@ -732,6 +816,25 @@ service http:InterceptableService / on new http:Listener(8090) {
             string customError = string `No repository request found with ID: ${id}`;
             log:printError(customError);
             return <http:NotFound>{
+                body: {
+                    message: customError
+                }
+            };
+        }
+        if !canReadRepositoryRequest(userInfo, repoRequest) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
+
+        comment.authorEmail = userInfo.email;
+        error? result = db:addRepositoryRequestComment(id, comment.authorEmail, comment.commentText);
+        if result is error {
+            string customError = "Error while adding comment!";
+            log:printError(customError, result);
+            return <http:InternalServerError>{
                 body: {
                     message: customError
                 }
@@ -776,6 +879,33 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
+
+        db:RepositoryRequest|error? repoRequest = db:getRepositoryRequest(id);
+        if repoRequest is error {
+            string customError = "Error while retrieving repository request!";
+            log:printError(customError, repoRequest);
+            return <http:InternalServerError>{
+                body: {
+                    message: customError
+                }
+            };
+        }
+        if repoRequest is () {
+            string customError = string `No repository request found with ID: ${id}`;
+            log:printError(customError);
+            return <http:NotFound>{
+                body: {
+                    message: customError
+                }
+            };
+        }
+        if !canReadRepositoryRequest(userInfo, repoRequest) {
             return <http:Forbidden>{
                 body: {
                     message: "Insufficient privileges!"
@@ -1846,9 +1976,9 @@ service http:InterceptableService / on new http:Listener(8090) {
             }
             DefaultAccessRepository[] existing = reposByOrg.get(ot.orgName);
             DefaultAccessRepository[] newRepos =
-                from gh:TeamRepository {name, htmlUrl} in teamRepos
+                from gh:TeamRepository {name, url} in teamRepos
                 where !existing.some(repo => repo.name == name)
-                select {name, htmlUrl};
+                select {name, htmlUrl: url};
             reposByOrg[ot.orgName] = [...existing, ...newRepos];
         }
 
@@ -1995,12 +2125,11 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         return membershipResult;
     }
-    # Exchange the authorization code for an access token.
+    # Issue a one-time state value for the GitHub OAuth redirect.
     #
-    # + payload - The authorization code received from GitHub after user authorization
-    # + return - Access token or error
-    isolated resource function post github/verify\-and\-persist\-user(http:RequestContext ctx, VerifyEmailPayload payload)
-        returns gh:EmailVerificationResponse|http:Forbidden|http:InternalServerError {
+    # + return - OAuth state bound to the signed-in user
+    isolated resource function post github/oauth\-state(http:RequestContext ctx)
+        returns GitHubOAuthStateResponse|http:Forbidden|http:InternalServerError {
 
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
         if userInfo is error {
@@ -2014,6 +2143,58 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:Forbidden>{
                 body: {
                     message: "Insufficient privileges!"
+                }
+            };
+        }
+
+        string state = uuid:createType4AsString();
+        cache:Error? cacheError = cache.put(githubOAuthStateKey(userInfo.email), state);
+        if cacheError is cache:Error {
+            log:printError("Error while storing GitHub OAuth state!", cacheError, email = userInfo.email);
+            return <http:InternalServerError>{
+                body: {
+                    message: "Error while starting GitHub connection!"
+                }
+            };
+        }
+        return {state};
+    }
+
+    # Exchange the authorization code for an access token.
+    #
+    # + payload - The authorization code received from GitHub after user authorization
+    # + return - Access token or error
+    isolated resource function post github/verify\-and\-persist\-user(http:RequestContext ctx, VerifyEmailPayload payload)
+        returns gh:EmailVerificationResponse|http:Forbidden|http:BadRequest|http:InternalServerError {
+
+        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
+        if userInfo is error {
+            return <http:InternalServerError>{
+                body: {
+                    message: "User information header not found!"
+                }
+            };
+        }
+        if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient privileges!"
+                }
+            };
+        }
+
+        string stateKey = githubOAuthStateKey(userInfo.email);
+        any|cache:Error storedState = cache.get(stateKey);
+        if storedState is string && storedState == payload.state {
+            cache:Error? cacheInvalidateError = cache.invalidate(stateKey);
+            if cacheInvalidateError is cache:Error {
+                log:printWarn("An error occurred while invalidating GitHub OAuth state", cacheInvalidateError,
+                        email = userInfo.email);
+            }
+        } else {
+            return <http:BadRequest>{
+                body: {
+                    message: "GitHub connection state is invalid."
                 }
             };
         }
@@ -2064,4 +2245,78 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         return result;
     }
+}
+
+isolated function githubOAuthStateKey(string email) returns string => "github-oauth-state:" + email;
+
+isolated function canReadRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
+    returns boolean {
+
+    if authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
+        return true;
+    }
+    return userInfo.email == request.email || userInfo.email == request.leadEmail;
+}
+
+isolated function canReviewRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
+    returns boolean {
+
+    if authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
+        return true;
+    }
+    return authorization:checkPermissions([authorization:authorizedRoles.approver], userInfo.groups)
+        && userInfo.email == request.leadEmail;
+}
+
+isolated function validateLeadEmail(string leadEmail) returns http:BadRequest|http:InternalServerError? {
+    db:TeamLead[]|error leads = db:getLeads();
+    if leads is error {
+        log:printError("Error while retrieving functional leads!", leads);
+        return <http:InternalServerError>{
+            body: {
+                message: "Error while retrieving functional leads!"
+            }
+        };
+    }
+    foreach db:TeamLead lead in leads {
+        if lead.leadEmail == leadEmail {
+            return;
+        }
+    }
+    return <http:BadRequest>{
+        body: {
+            message: "leadEmail is not a configured functional lead."
+        }
+    };
+}
+
+isolated function validateRepositoryType(int organizationId, string repoType)
+    returns http:BadRequest|http:InternalServerError? {
+
+    db:Organization|error organization = db:getOrganizationById(organizationId);
+    if organization is sql:NoRowsError {
+        return <http:BadRequest>{
+            body: {
+                message: "Organization was not found."
+            }
+        };
+    }
+    if organization is error {
+        log:printError("Error while retrieving organization!", organization);
+        return <http:InternalServerError>{
+            body: {
+                message: "Error while retrieving organization!"
+            }
+        };
+    }
+    boolean privateOrg = organization.organizationVisibility.equalsIgnoreCaseAscii("private");
+    boolean freePlan = organization.organizationPlan.equalsIgnoreCaseAscii("free");
+    if (privateOrg && repoType == "Public") || (freePlan && repoType == "Private") {
+        return <http:BadRequest>{
+            body: {
+                message: "Repository type is not allowed for this organization."
+            }
+        };
+    }
+    return;
 }

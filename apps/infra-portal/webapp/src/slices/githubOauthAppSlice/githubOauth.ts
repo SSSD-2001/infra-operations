@@ -24,6 +24,7 @@ import { APIService } from "@utils/apiService";
 
 interface GitHubConnectPayload {
   code: string;
+  state: string;
 }
 
 export interface GitHubUserVerifyResponse {
@@ -76,12 +77,13 @@ export interface DefaultRepositoryAccessResponse {
 
 export const connectGitHub = createAsyncThunk(
   "auth/connectGitHub",
-  async ({ code }: GitHubConnectPayload, { dispatch, rejectWithValue }) => {
+  async ({ code, state }: GitHubConnectPayload, { dispatch, rejectWithValue }) => {
     try {
       const response = await APIService.getInstance().post(
         AppConfig.serviceUrls.githubVerifyAndPersistUser,
         {
           code,
+          state,
         },
       );
       return response.data as GitHubUserVerifyResponse;

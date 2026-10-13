@@ -66,9 +66,10 @@ isolated function getRepositoryRequestQuery(int id) returns sql:ParameterizedQue
 # + offset - Offset for the number of records to be returned
 # + repoName - Repository name
 # + approvalState - Approval state of the repository request
+# + callerEmail - Signed-in caller. When set, results are limited to that person's requests and assigned leads
 # + return - Repository requests created by the user or sql:Error
 isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEmail, int? 'limit, int? offset,
-        string? repoName, RepositoryRequestState? approvalState) returns sql:ParameterizedQuery {
+        string? repoName, RepositoryRequestState? approvalState, string? callerEmail) returns sql:ParameterizedQuery {
 
     sql:ParameterizedQuery mainQuery = `
         SELECT 
@@ -118,6 +119,11 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
 
     if approvalState is RepositoryRequestState {
         mainQuery = sql:queryConcat(mainQuery, ` AND state = ${approvalState}`);
+    }
+
+    if callerEmail is string {
+        mainQuery = sql:queryConcat(mainQuery,
+                ` AND (rr.email = ${callerEmail} OR rr.lead_email = ${callerEmail})`);
     }
 
     mainQuery = sql:queryConcat(mainQuery, ` ORDER BY timestamp DESC`);
@@ -803,5 +809,5 @@ isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType e
         department
     FROM organizations_default_repositories
     WHERE employment_type = ${employmentType}
-        AND (department = '' OR department = ${department})
+        AND (department IS NULL OR department = '' OR department = ${department})
 `;

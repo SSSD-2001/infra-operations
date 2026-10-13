@@ -229,6 +229,8 @@ public type RepositoryRequestFilter record {|
     int? 'limit = ();
     # Starting point for pagination
     int? offset = ();
+    # Signed-in caller. When set, the list is limited to that person's own requests and assigned leads.
+    string? callerEmail = ();
 |};
 
 # Record to represent an organization.

@@ -21,11 +21,11 @@ import ballerina/mime;
 # + data - Approved request email data
 # + return - Email body or error
 public isolated function createRequestTemplate(RepositoryRequest data) returns string|error {
-    string websiteUrl = data.websiteUrl ?: "N/A";
-    string jenkinsJobType = data.jenkinsJobType ?: "N/A";
-    string jenkinsGroupId = data.jenkinsGroupId ?: "N/A";
-    string azureDevopsOrg = data.azureDevopsOrg ?: "N/A";
-    string azureDevopsProject = data.azureDevopsProject ?: "N/A";
+    string websiteUrl = escapeHtml(data.websiteUrl ?: "N/A");
+    string jenkinsJobType = escapeHtml(data.jenkinsJobType ?: "N/A");
+    string jenkinsGroupId = escapeHtml(data.jenkinsGroupId ?: "N/A");
+    string azureDevopsOrg = escapeHtml(data.azureDevopsOrg ?: "N/A");
+    string azureDevopsProject = escapeHtml(data.azureDevopsProject ?: "N/A");
     string emailBody = string `
     <!DOCTYPE html>
     <html>
@@ -118,41 +118,41 @@ public isolated function createRequestTemplate(RepositoryRequest data) returns s
 
             <div class="section">
                 <p class="section-title">Request Details</p>
-                <div class="detail-item"><span class="detail-label">Requested By:</span> <span class="detail-value">${data.email}</span></div>
-                <div class="detail-item"><span class="detail-label">Lead Approver:</span> <span class="detail-value">${data.leadEmail}</span></div>
-                <div class="detail-item"><span class="detail-label">Requirement:</span> <span class="detail-value">${data.requirement}</span></div>
+                <div class="detail-item"><span class="detail-label">Requested By:</span> <span class="detail-value">${escapeHtml(data.email)}</span></div>
+                <div class="detail-item"><span class="detail-label">Lead Approver:</span> <span class="detail-value">${escapeHtml(data.leadEmail)}</span></div>
+                <div class="detail-item"><span class="detail-label">Requirement:</span> <span class="detail-value">${escapeHtml(data.requirement)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">Repository Information</p>
-                <div class="detail-item"><span class="detail-label">Repository Name:</span> <span class="detail-value">${data.repoName}</span></div>
-                <div class="detail-item"><span class="detail-label">Organization:</span> <span class="detail-value">${data.organizationName}</span></div>
-                <div class="detail-item"><span class="detail-label">Repo Type:</span> <span class="detail-value">${data.repoType}</span></div>
-                <div class="detail-item"><span class="detail-label">Description:</span> <span class="detail-value">${data.description}</span></div>
+                <div class="detail-item"><span class="detail-label">Repository Name:</span> <span class="detail-value">${escapeHtml(data.repoName)}</span></div>
+                <div class="detail-item"><span class="detail-label">Organization:</span> <span class="detail-value">${escapeHtml(data.organizationName)}</span></div>
+                <div class="detail-item"><span class="detail-label">Repo Type:</span> <span class="detail-value">${escapeHtml(data.repoType)}</span></div>
+                <div class="detail-item"><span class="detail-label">Description:</span> <span class="detail-value">${escapeHtml(data.description)}</span></div>
                 <div class="detail-item"><span class="detail-label">Website URL:</span> <span class="detail-value">${websiteUrl}</span></div>
-                <div class="detail-item"><span class="detail-label">Topics:</span> <span class="detail-value">${data.topics}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Issues:</span> <span class="detail-value">${data.enableIssues}</span></div>
+                <div class="detail-item"><span class="detail-label">Topics:</span> <span class="detail-value">${escapeHtml(data.topics)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Issues:</span> <span class="detail-value">${escapeHtml(data.enableIssues)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">Security & Access</p>
-                <div class="detail-item"><span class="detail-label">PR Protection:</span> <span class="detail-value">${data.prProtection}</span></div>
-                <div class="detail-item"><span class="detail-label">Teams to be Added:</span> <span class="detail-value">${data.teams}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All):</span> <span class="detail-value">${data.enableTriageWso2All}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All Interns):</span> <span class="detail-value">${data.enableTriageWso2AllInterns}</span></div>
-                <div class="detail-item"><span class="detail-label">Disable Triage Reason:</span> <span class="detail-value">${data.disableTriageReason}</span></div>
+                <div class="detail-item"><span class="detail-label">PR Protection:</span> <span class="detail-value">${escapeHtml(data.prProtection)}</span></div>
+                <div class="detail-item"><span class="detail-label">Teams to be Added:</span> <span class="detail-value">${escapeHtml(data.teams)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All):</span> <span class="detail-value">${escapeHtml(data.enableTriageWso2All)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All Interns):</span> <span class="detail-value">${escapeHtml(data.enableTriageWso2AllInterns)}</span></div>
+                <div class="detail-item"><span class="detail-label">Disable Triage Reason:</span> <span class="detail-value">${escapeHtml(data.disableTriageReason)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">DevOps Integration</p>
-                <div class="detail-item"><span class="detail-label">CI/CD Requirement:</span> <span class="detail-value">${data.cicdRequirement}</span></div>
+                <div class="detail-item"><span class="detail-label">CI/CD Requirement:</span> <span class="detail-value">${escapeHtml(data.cicdRequirement)}</span></div>
                 <div class="detail-item"><span class="detail-label">Jenkins Job Type:</span> <span class="detail-value">${jenkinsJobType}</span></div>
                 <div class="detail-item"><span class="detail-label">Jenkins Group ID:</span> <span class="detail-value">${jenkinsGroupId}</span></div>
                 <div class="detail-item"><span class="detail-label">Azure DevOps Organization:</span> <span class="detail-value">${azureDevopsOrg}</span></div>
                 <div class="detail-item"><span class="detail-label">Azure DevOps Project:</span> <span class="detail-value">${azureDevopsProject}</span></div>
             </div>
 
-            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${escapeHtml(supportEmail)}">${escapeHtml(supportEmail)}</a>.</p>
         </div>
     </body>
     </html>`;
@@ -167,7 +167,7 @@ public isolated function createRequestTemplate(RepositoryRequest data) returns s
 public isolated function approveRequestTemplate(ApproveRequestEmailData data, GitHubOperationResult[] results) returns string|error {
     string operationSummary = "<ul>";
     foreach GitHubOperationResult result in results {
-        operationSummary += string `<li>${result.operation}: <strong>${result.status}</strong></li>`;
+        operationSummary += string `<li>${escapeHtml(result.operation)}: <strong>${escapeHtml(result.status)}</strong></li>`;
     }
     operationSummary += "</ul>";
     string emailBody = string `
@@ -259,8 +259,8 @@ public isolated function approveRequestTemplate(ApproveRequestEmailData data, Gi
                 <p class="section-title">Repository Details</p>
                 <p class="content">
                     <span class="highlight">Repository Link:</span> 
-                    <a class="link" href="https://github.com/${data.organizationName}/${data.repoName}" target="_blank">
-                        https://github.com/${data.organizationName}/${data.repoName}
+                    <a class="link" href="https://github.com/${escapeHtml(data.organizationName)}/${escapeHtml(data.repoName)}" target="_blank">
+                        https://github.com/${escapeHtml(data.organizationName)}/${escapeHtml(data.repoName)}
                     </a>
                 </p>
             </div>
@@ -276,7 +276,7 @@ public isolated function approveRequestTemplate(ApproveRequestEmailData data, Gi
                 DevOps configurations will be handled by the DigiOps Team manually.
             </p>
 
-            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${escapeHtml(supportEmail)}">${escapeHtml(supportEmail)}</a>.</p>
         </div>
     </body>
     </html>`;
@@ -383,10 +383,10 @@ public isolated function commentTemplate(Comment comment, int requestId) returns
             <div class="section">
                 <p class="section-title">Comment Details</p>
                 <div class="comment-content">
-                    <span class="highlight">Comment:</span> ${comment.commentText}
+                    <span class="highlight">Comment:</span> ${escapeHtml(comment.commentText)}
                 </div>
                 <div class="detail-item">
-                    <span class="highlight">Author:</span> ${comment.authorEmail}
+                    <span class="highlight">Author:</span> ${escapeHtml(comment.authorEmail)}
                 </div>
             </div>
 
@@ -394,7 +394,7 @@ public isolated function commentTemplate(Comment comment, int requestId) returns
                 Please review and update your request accordingly. If you have any questions, feel free to reach out.
             </p>
 
-            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${escapeHtml(supportEmail)}">${escapeHtml(supportEmail)}</a>.</p>
         </div>
     </body>
     </html>
@@ -534,7 +534,7 @@ public isolated function updateRequestTemplate(UpdateRequestEmailData updatedDat
                     <div class="detail-item"><span class="detail-label">Azure DevOps Project:</span> <span class="detail-value">${updatedData.azureDevopsProject}</span></div>
                 </div>
 
-                <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+                <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${escapeHtml(supportEmail)}">${escapeHtml(supportEmail)}</a>.</p>
             </div>
         </body>
         </html>`;
@@ -546,11 +546,11 @@ public isolated function updateRequestTemplate(UpdateRequestEmailData updatedDat
 # + data - Rejected request data
 # + return - Email body or error
 public isolated function rejectRequestTemplate(RejectRequestEmailData data) returns string|error { 
-    string websiteUrl = data.websiteUrl ?: "N/A";
-    string jenkinsJobType = data.jenkinsJobType ?: "N/A";
-    string jenkinsGroupId = data.jenkinsGroupId ?: "N/A";
-    string azureDevopsOrg = data.azureDevopsOrg ?: "N/A";
-    string azureDevopsProject = data.azureDevopsProject ?: "N/A";
+    string websiteUrl = escapeHtml(data.websiteUrl ?: "N/A");
+    string jenkinsJobType = escapeHtml(data.jenkinsJobType ?: "N/A");
+    string jenkinsGroupId = escapeHtml(data.jenkinsGroupId ?: "N/A");
+    string azureDevopsOrg = escapeHtml(data.azureDevopsOrg ?: "N/A");
+    string azureDevopsProject = escapeHtml(data.azureDevopsProject ?: "N/A");
 
     string emailBody = string `
     <!DOCTYPE html>
@@ -654,41 +654,41 @@ public isolated function rejectRequestTemplate(RejectRequestEmailData data) retu
 
             <div class="section">
                 <p class="section-title">Request Details</p>
-                <div class="detail-item"><span class="detail-label">Requested By:</span> <span class="detail-value">${data.email}</span></div>
-                <div class="detail-item"><span class="detail-label">Lead Approver:</span> <span class="detail-value">${data.leadEmail}</span></div>
-                <div class="detail-item"><span class="detail-label">Requirement:</span> <span class="detail-value">${data.requirement}</span></div>
+                <div class="detail-item"><span class="detail-label">Requested By:</span> <span class="detail-value">${escapeHtml(data.email)}</span></div>
+                <div class="detail-item"><span class="detail-label">Lead Approver:</span> <span class="detail-value">${escapeHtml(data.leadEmail)}</span></div>
+                <div class="detail-item"><span class="detail-label">Requirement:</span> <span class="detail-value">${escapeHtml(data.requirement)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">Repository Information</p>
-                <div class="detail-item"><span class="detail-label">Repository Name:</span> <span class="detail-value">${data.repoName}</span></div>
-                <div class="detail-item"><span class="detail-label">Organization:</span> <span class="detail-value">${data.organizationName}</span></div>
-                <div class="detail-item"><span class="detail-label">Repo Type:</span> <span class="detail-value">${data.repoType}</span></div>
-                <div class="detail-item"><span class="detail-label">Description:</span> <span class="detail-value">${data.description}</span></div>
+                <div class="detail-item"><span class="detail-label">Repository Name:</span> <span class="detail-value">${escapeHtml(data.repoName)}</span></div>
+                <div class="detail-item"><span class="detail-label">Organization:</span> <span class="detail-value">${escapeHtml(data.organizationName)}</span></div>
+                <div class="detail-item"><span class="detail-label">Repo Type:</span> <span class="detail-value">${escapeHtml(data.repoType)}</span></div>
+                <div class="detail-item"><span class="detail-label">Description:</span> <span class="detail-value">${escapeHtml(data.description)}</span></div>
                 <div class="detail-item"><span class="detail-label">Website URL:</span> <span class="detail-value">${websiteUrl}</span></div>
-                <div class="detail-item"><span class="detail-label">Topics:</span> <span class="detail-value">${data.topics}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Issues:</span> <span class="detail-value">${data.enableIssues}</span></div>
+                <div class="detail-item"><span class="detail-label">Topics:</span> <span class="detail-value">${escapeHtml(data.topics)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Issues:</span> <span class="detail-value">${escapeHtml(data.enableIssues)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">Security & Access</p>
-                <div class="detail-item"><span class="detail-label">PR Protection:</span> <span class="detail-value">${data.prProtection}</span></div>
-                <div class="detail-item"><span class="detail-label">Teams to be Added:</span> <span class="detail-value">${data.teams}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All):</span> <span class="detail-value">${data.enableTriageWso2All}</span></div>
-                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All Interns):</span> <span class="detail-value">${data.enableTriageWso2AllInterns}</span></div>
-                <div class="detail-item"><span class="detail-label">Disable Triage Reason:</span> <span class="detail-value">${data.disableTriageReason}</span></div>
+                <div class="detail-item"><span class="detail-label">PR Protection:</span> <span class="detail-value">${escapeHtml(data.prProtection)}</span></div>
+                <div class="detail-item"><span class="detail-label">Teams to be Added:</span> <span class="detail-value">${escapeHtml(data.teams)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All):</span> <span class="detail-value">${escapeHtml(data.enableTriageWso2All)}</span></div>
+                <div class="detail-item"><span class="detail-label">Enable Triage (WSO2 All Interns):</span> <span class="detail-value">${escapeHtml(data.enableTriageWso2AllInterns)}</span></div>
+                <div class="detail-item"><span class="detail-label">Disable Triage Reason:</span> <span class="detail-value">${escapeHtml(data.disableTriageReason)}</span></div>
             </div>
 
             <div class="section">
                 <p class="section-title">DevOps Integration</p>
-                <div class="detail-item"><span class="detail-label">CI/CD Requirement:</span> <span class="detail-value">${data.cicdRequirement}</span></div>
+                <div class="detail-item"><span class="detail-label">CI/CD Requirement:</span> <span class="detail-value">${escapeHtml(data.cicdRequirement)}</span></div>
                 <div class="detail-item"><span class="detail-label">Jenkins Job Type:</span> <span class="detail-value">${jenkinsJobType}</span></div>
                 <div class="detail-item"><span class="detail-label">Jenkins Group ID:</span> <span class="detail-value">${jenkinsGroupId}</span></div>
                 <div class="detail-item"><span class="detail-label">Azure DevOps Organization:</span> <span class="detail-value">${azureDevopsOrg}</span></div>
                 <div class="detail-item"><span class="detail-label">Azure DevOps Project:</span> <span class="detail-value">${azureDevopsProject}</span></div>
             </div>
             
-            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${supportEmail}">${supportEmail}</a>.</p>
+            <p class="footer">This is an automated notification from the WSO2 <strong>Infra Portal</strong>. If you have any questions, contact the Digital Operations Team at <a class="link" href="mailto:${escapeHtml(supportEmail)}">${escapeHtml(supportEmail)}</a>.</p>
         </div>
     </body>
 </html>`;

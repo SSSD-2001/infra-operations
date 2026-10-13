@@ -13,8 +13,10 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-import { GithubOAuthConfig } from "@config/config";
+import { AppConfig, GithubOAuthConfig } from "@config/config";
 import type { NavigateFunction } from "react-router-dom";
+
+import { APIService } from "@utils/apiService";
 
 import { GITHUB_OAUTH_STATE_KEY, RESULT_KEY, PENDING_OAUTH_CODE_KEY } from "@config/constant";
 
@@ -73,8 +75,14 @@ export const resolveGitHubConnectionStatus = (
   return { isConnected, githubUsername: githubUsername ?? undefined };
 };
 
-export const startGitHubOAuth = (returnPath: string = DEFAULT_GITHUB_OAUTH_RETURN_PATH): void => {
-  const state = self.crypto.randomUUID();
+export const startGitHubOAuth = async (
+  returnPath: string = DEFAULT_GITHUB_OAUTH_RETURN_PATH,
+): Promise<void> => {
+  const response = await APIService.getInstance().post(AppConfig.serviceUrls.githubOAuthState);
+  const state = String((response.data as { state?: string }).state || "");
+  if (!state) {
+    throw new Error("GitHub connection state was not issued.");
+  }
   const stateObj: GitHubOAuthStoredState = { state, createdAt: Date.now(), returnPath };
   sessionStorage.setItem(GITHUB_OAUTH_STATE_KEY, JSON.stringify(stateObj));
 

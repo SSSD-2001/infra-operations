@@ -49,7 +49,6 @@ import CommentSection from "@component/common/comment/CommentSection";
 import RepoRequestForm from "@component/common/request/RepoRequestForm";
 import RepositoryRequestDetails from "@component/common/request/RepositoryRequestDetails";
 import { useConfirmationModalContext } from "@context";
-import { addComments } from "@slices/commentSlice/comment";
 import {
   RepositoryRequest,
   RequestApprovalState,
@@ -163,15 +162,12 @@ export default function RequestHistoryTable({
       async (comment?: string) => {
         if (typeof comment === "string" && comment.trim() !== "") {
           try {
-            // Save the mandatory rejection comment first; only reject if it succeeds.
             await dispatch(
-              addComments({
-                requestId: requestId,
-                authorEmail: leadEmailProp || adminEmailProp || "",
+              rejectRepositoryRequest({
+                id: requestId,
                 commentText: `[REJECTED]-${comment}`,
               }),
             ).unwrap();
-            await dispatch(rejectRepositoryRequest(requestId)).unwrap();
             handleCloseTakeDecisionDialog();
             refetch();
           } catch {
