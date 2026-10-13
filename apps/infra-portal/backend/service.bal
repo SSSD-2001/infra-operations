@@ -488,7 +488,7 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
-        if oldRepoRequest.state != db:PENDING || userInfo.email != oldRepoRequest.email {
+        if oldRepoRequest.state != db:PENDING || !userInfo.email.equalsIgnoreCaseAscii(oldRepoRequest.email) {
             return <http:Forbidden>{
                 body: {
                     message: "Insufficient privileges!"
@@ -2255,7 +2255,8 @@ isolated function canReadRepositoryRequest(authorization:CustomJwtPayload userIn
     if authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
         return true;
     }
-    return userInfo.email == request.email || userInfo.email == request.leadEmail;
+    return userInfo.email.equalsIgnoreCaseAscii(request.email)
+        || userInfo.email.equalsIgnoreCaseAscii(request.leadEmail);
 }
 
 isolated function canReviewRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
@@ -2265,7 +2266,7 @@ isolated function canReviewRepositoryRequest(authorization:CustomJwtPayload user
         return true;
     }
     return authorization:checkPermissions([authorization:authorizedRoles.approver], userInfo.groups)
-        && userInfo.email == request.leadEmail;
+        && userInfo.email.equalsIgnoreCaseAscii(request.leadEmail);
 }
 
 isolated function validateLeadEmail(string leadEmail) returns http:BadRequest|http:InternalServerError? {
@@ -2279,7 +2280,7 @@ isolated function validateLeadEmail(string leadEmail) returns http:BadRequest|ht
         };
     }
     foreach db:TeamLead lead in leads {
-        if lead.leadEmail == leadEmail {
+        if lead.leadEmail.equalsIgnoreCaseAscii(leadEmail) {
             return;
         }
     }

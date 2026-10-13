@@ -22,7 +22,10 @@ import infra_portal.types;
 # + id - Repository request id
 # + return - RepositoryRequest or error
 public isolated function getRepositoryRequest(int id) returns RepositoryRequest|error? {
-    RepositoryRequest result = check databaseClient->queryRow(getRepositoryRequestQuery(id));
+    RepositoryRequest|error result = databaseClient->queryRow(getRepositoryRequestQuery(id));
+    if result is sql:NoRowsError {
+        return ();
+    }
     return result;
 }
 

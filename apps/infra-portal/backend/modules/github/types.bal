@@ -385,9 +385,8 @@ public type OrganizationAndTeam record {
 public type TeamRepository record {|
     # Repository name
     string name;
-    # HTML URL
-    @jsondata:Name {value: "html_url"}
-    string htmlUrl;
+    # Repository page URL returned by the entity service
+    string url;
     json...;
 |};
 
