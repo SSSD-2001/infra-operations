@@ -418,6 +418,11 @@ service http:InterceptableService / on new http:Listener(8090) {
         if leadError is http:BadRequest|http:InternalServerError {
             return leadError;
         }
+        string|http:BadRequest normalizedRepoType = normalizeRepositoryType(request.repoType);
+        if normalizedRepoType is http:BadRequest {
+            return normalizedRepoType;
+        }
+        request.repoType = normalizedRepoType;
         http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(request.organizationId, request.repoType);
         if typeError is http:BadRequest|http:InternalServerError {
             return typeError;
@@ -504,11 +509,17 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         int organizationId = updatedData.organizationId ?: oldRepoRequest.organizationId;
         string repoType = updatedData.repoType ?: oldRepoRequest.repoType;
-        http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(organizationId, repoType);
+        string|http:BadRequest normalizedRepoType = normalizeRepositoryType(repoType);
+        if normalizedRepoType is http:BadRequest {
+            return normalizedRepoType;
+        }
+        if updatedData.repoType is string {
+            updatedData.repoType = normalizedRepoType;
+        }
+        http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(organizationId, normalizedRepoType);
         if typeError is http:BadRequest|http:InternalServerError {
             return typeError;
         }
-
         error? result = db:updateRepositoryRequest(id, updatedData);
         if result is error {
             string customError = "Error updating repository request!";
@@ -729,6 +740,11 @@ service http:InterceptableService / on new http:Listener(8090) {
                 }
             };
         }
+        string|http:BadRequest normalizedRepoType = normalizeRepositoryType(repoRequest.repoType);
+        if normalizedRepoType is http:BadRequest {
+            return normalizedRepoType;
+        }
+        repoRequest.repoType = normalizedRepoType;
         http:BadRequest|http:InternalServerError? typeError = validateRepositoryType(repoRequest.organizationId,
                 repoRequest.repoType);
         if typeError is http:BadRequest|http:InternalServerError {
@@ -2287,6 +2303,20 @@ isolated function validateLeadEmail(string leadEmail) returns http:BadRequest|ht
     return <http:BadRequest>{
         body: {
             message: "leadEmail is not a configured functional lead."
+        }
+    };
+}
+
+isolated function normalizeRepositoryType(string repoType) returns string|http:BadRequest {
+    if repoType.equalsIgnoreCaseAscii("public") {
+        return "Public";
+    }
+    if repoType.equalsIgnoreCaseAscii("private") {
+        return "Private";
+    }
+    return <http:BadRequest>{
+        body: {
+            message: "Repository type must be Public or Private."
         }
     };
 }
