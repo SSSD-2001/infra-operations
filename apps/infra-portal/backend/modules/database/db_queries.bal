@@ -109,7 +109,7 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
         LEFT JOIN 
             github_organizations go ON rr.organization_id = go.organization_id
         WHERE 
-            (LOWER(rr.email) = LOWER(${memberEmail}) OR ${memberEmail} IS NULL) AND 
+            (LOWER(rr.email) = LOWER(${memberEmail}) OR ${memberEmail} IS NULL) AND
             (LOWER(rr.lead_email) = LOWER(${leadEmail}) OR ${leadEmail} IS NULL)
     `;
 
