@@ -109,8 +109,8 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
         LEFT JOIN 
             github_organizations go ON rr.organization_id = go.organization_id
         WHERE 
-            (rr.email = ${memberEmail} OR ${memberEmail} IS NULL) AND 
-            (rr.lead_email = ${leadEmail} OR ${leadEmail} IS NULL)
+            (LOWER(rr.email) = LOWER(${memberEmail}) OR ${memberEmail} IS NULL) AND 
+            (LOWER(rr.lead_email) = LOWER(${leadEmail}) OR ${leadEmail} IS NULL) AND
     `;
 
     if repoName is string {
@@ -123,7 +123,7 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
 
     if callerEmail is string {
         mainQuery = sql:queryConcat(mainQuery,
-                ` AND (rr.email = ${callerEmail} OR rr.lead_email = ${callerEmail})`);
+        ` AND (LOWER(rr.email) = LOWER(${callerEmail}) OR LOWER(rr.lead_email) = LOWER(${callerEmail}))`);
     }
 
     mainQuery = sql:queryConcat(mainQuery, ` ORDER BY timestamp DESC`);
