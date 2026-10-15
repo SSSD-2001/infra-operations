@@ -131,13 +131,9 @@ export default function RequestHistoryTable({
       </Typography>,
       ConfirmationType.accept,
       async () => {
-        try {
-          await dispatch(approveRepositoryRequest(requestId)).unwrap();
-          handleCloseTakeDecisionDialog();
-          refetch();
-        } catch {
-          // Approval failed; keep the dialog open. The thunk surfaces an error snackbar.
-        }
+        await dispatch(approveRepositoryRequest(requestId)).unwrap();
+        handleCloseTakeDecisionDialog();
+        refetch();
       },
       "Approve",
       "Cancel",
@@ -161,18 +157,14 @@ export default function RequestHistoryTable({
       ConfirmationType.accept,
       async (comment?: string) => {
         if (typeof comment === "string" && comment.trim() !== "") {
-          try {
-            await dispatch(
-              rejectRepositoryRequest({
-                id: requestId,
-                commentText: `[REJECTED]-${comment}`,
-              }),
-            ).unwrap();
-            handleCloseTakeDecisionDialog();
-            refetch();
-          } catch {
-            // Comment or rejection failed; do not proceed. The thunk surfaces an error snackbar.
-          }
+          await dispatch(
+            rejectRepositoryRequest({
+              id: requestId,
+              commentText: `[REJECTED]-${comment}`,
+            }),
+          ).unwrap();
+          handleCloseTakeDecisionDialog();
+          refetch();
         }
       },
       "Reject",
@@ -449,7 +441,7 @@ export default function RequestHistoryTable({
         <Box sx={{ width: "100%", height: 560 }}>
           <CustomDataGrid
             columns={columns}
-            rows={isLoading ? [] : repositoryRequestList}
+            rows={isLoading && isFetching ? [] : repositoryRequestList}
             rowCount={totalRequests}
             paginationMode="server"
             getRowId={(row) => row.id}

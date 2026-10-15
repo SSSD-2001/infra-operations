@@ -61,6 +61,7 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
 ) => {
   const [show, setShow] = useState(false);
   const [comment, setComment] = React.useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const onHide = () => setShow(false);
 
@@ -96,11 +97,19 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
     showConfirmation: handleShow,
   };
 
-  const handleOk = (value?: string) => {
-    if (content) {
-      content.action(value);
+  const handleOk = async (value?: string) => {
+    if (!content || submitting) {
+      return;
     }
-    onHide();
+    setSubmitting(true);
+    try {
+      await content.action(value);
+      onHide();
+    } catch {
+      // The request reports its own error. Keep this dialog open.
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const Reset = () => {
@@ -113,6 +122,7 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
       cancelText: undefined,
     });
     setComment("");
+    setSubmitting(false);
   };
 
   const handleCancel = () => {
@@ -187,11 +197,14 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
                   onClick={handleCancel}
                   variant="outlined"
                   size="small"
+                  disabled={submitting}
                 >
                   {content?.cancelText ? content.cancelText : "No"}
                 </Button>
                 <LoadingButton
                   type="submit"
+                  loading={submitting}
+                  disabled={submitting || (content?.inputObj?.mandatory && comment === "")}
                   sx={{
                     borderRadius: 2,
                     boxShadow: "none",
@@ -200,7 +213,6 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
                   }}
                   variant="contained"
                   size="small"
-                  disabled={content?.inputObj?.mandatory && comment === ""}
                   onClick={() => (content?.inputObj ? handleOk(comment) : handleOk())}
                   loadingPosition="start"
                   startIcon={
