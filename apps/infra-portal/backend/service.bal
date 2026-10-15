@@ -25,7 +25,6 @@ import ballerina/cache;
 import ballerina/http;
 import ballerina/log;
 import ballerina/sql;
-import ballerina/uuid;
 
 configurable SecurityDashboardLinks securityDashboardLinks = ?;
 
@@ -650,7 +649,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-        error? emailError = email:rejectRepoRequestAlert(repositoryRequest);
+        error? emailError = email:rejectRepoRequestAlert(repositoryRequest, payload.commentText);
         if emailError is error {
             log:printError("Error while sending email!", emailError);
         }
@@ -2141,48 +2140,13 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         return membershipResult;
     }
-    # Issue a one-time state value for the GitHub OAuth redirect.
-    #
-    # + return - OAuth state bound to the signed-in user
-    isolated resource function post github/oauth\-state(http:RequestContext ctx)
-        returns GitHubOAuthStateResponse|http:Forbidden|http:InternalServerError {
-
-        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
-        if userInfo is error {
-            return <http:InternalServerError>{
-                body: {
-                    message: "User information header not found!"
-                }
-            };
-        }
-        if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
-            return <http:Forbidden>{
-                body: {
-                    message: "Insufficient privileges!"
-                }
-            };
-        }
-
-        string state = uuid:createType4AsString();
-        cache:Error? cacheError = cache.put(githubOAuthStateKey(userInfo.email), state);
-        if cacheError is cache:Error {
-            log:printError("Error while storing GitHub OAuth state!", cacheError, email = userInfo.email);
-            return <http:InternalServerError>{
-                body: {
-                    message: "Error while starting GitHub connection!"
-                }
-            };
-        }
-        return {state};
-    }
 
     # Exchange the authorization code for an access token.
     #
     # + payload - The authorization code received from GitHub after user authorization
     # + return - Access token or error
     isolated resource function post github/verify\-and\-persist\-user(http:RequestContext ctx, VerifyEmailPayload payload)
-        returns gh:EmailVerificationResponse|http:Forbidden|http:BadRequest|http:InternalServerError {
-
+        returns gh:EmailVerificationResponse|http:Forbidden|http:InternalServerError {
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
         if userInfo is error {
             return <http:InternalServerError>{
@@ -2195,22 +2159,6 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:Forbidden>{
                 body: {
                     message: "Insufficient privileges!"
-                }
-            };
-        }
-
-        string stateKey = githubOAuthStateKey(userInfo.email);
-        any|cache:Error storedState = cache.get(stateKey);
-        if storedState is string && storedState == payload.state {
-            cache:Error? cacheInvalidateError = cache.invalidate(stateKey);
-            if cacheInvalidateError is cache:Error {
-                log:printWarn("An error occurred while invalidating GitHub OAuth state", cacheInvalidateError,
-                        email = userInfo.email);
-            }
-        } else {
-            return <http:BadRequest>{
-                body: {
-                    message: "GitHub connection state is invalid."
                 }
             };
         }
@@ -2262,8 +2210,6 @@ service http:InterceptableService / on new http:Listener(8090) {
         return result;
     }
 }
-
-isolated function githubOAuthStateKey(string email) returns string => "github-oauth-state:" + email;
 
 isolated function canReadRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
     returns boolean {
@@ -2341,8 +2287,9 @@ isolated function validateRepositoryType(int organizationId, string repoType)
         };
     }
     boolean privateOrg = organization.organizationVisibility.equalsIgnoreCaseAscii("private");
+    boolean publicOrg = organization.organizationVisibility.equalsIgnoreCaseAscii("public");
     boolean freePlan = organization.organizationPlan.equalsIgnoreCaseAscii("free");
-    if (privateOrg && repoType == "Public") || (freePlan && repoType == "Private") {
+    if (privateOrg && repoType == "Public") || ((freePlan || publicOrg) && repoType == "Private") {
         return <http:BadRequest>{
             body: {
                 message: "Repository type is not allowed for this organization."

@@ -45,12 +45,7 @@ export default function GitHubConnect() {
 
   const handleRedirect = () => {
     setStoredResult(null);
-    void startGitHubOAuth(DEFAULT_GITHUB_OAUTH_RETURN_PATH).catch(() => {
-      setStoredResult({
-        status: "error",
-        errorMessage: "Could not start the GitHub connection. Please try again.",
-      });
-    });
+    startGitHubOAuth(DEFAULT_GITHUB_OAUTH_RETURN_PATH);
   };
 
   useEffect(() => {

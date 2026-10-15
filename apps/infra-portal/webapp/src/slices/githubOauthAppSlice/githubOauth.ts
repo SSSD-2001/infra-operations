@@ -15,7 +15,6 @@
 // under the License.
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios, { HttpStatusCode } from "axios";
-
 import { AppConfig } from "@config/config";
 import { SnackMessage } from "@config/constant";
 import { State } from "@root/src/types/types";
@@ -24,7 +23,6 @@ import { APIService } from "@utils/apiService";
 
 interface GitHubConnectPayload {
   code: string;
-  state: string;
 }
 
 export interface GitHubUserVerifyResponse {
@@ -77,13 +75,12 @@ export interface DefaultRepositoryAccessResponse {
 
 export const connectGitHub = createAsyncThunk(
   "auth/connectGitHub",
-  async ({ code, state }: GitHubConnectPayload, { dispatch, rejectWithValue }) => {
+  async ({ code }: GitHubConnectPayload, { dispatch, rejectWithValue }) => {
     try {
       const response = await APIService.getInstance().post(
         AppConfig.serviceUrls.githubVerifyAndPersistUser,
         {
           code,
-          state,
         },
       );
       return response.data as GitHubUserVerifyResponse;

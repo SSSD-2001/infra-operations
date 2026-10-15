@@ -553,6 +553,12 @@ isolated function getOrganizationByIdQuery(int organizationId) returns sql:Param
         default_teams dt ON odt.team_id = dt.team_id
     WHERE
         o.organization_id = ${organizationId}
+    GROUP BY
+        o.organization_id,
+        o.organization_name,
+        o.visibility,
+        o.plan,
+        o.enable_issues
     `;
 
 # Query to add a new organization.

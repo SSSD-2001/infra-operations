@@ -63,11 +63,12 @@ public isolated function approveRepoRequestAlert(ApproveRequestEmailData data, G
 # Send an email notifying the rejection of a repository request.
 #
 # + data - Repository request object data for the email body
+# + commentText - Rejection reason included in the email
 # + return - Error or null if successful
-public isolated function rejectRepoRequestAlert(RejectRequestEmailData data) 
+public isolated function rejectRepoRequestAlert(RejectRequestEmailData data, string commentText)
     returns error? {
-        
-    string emailBody = check rejectRequestTemplate(data);
+
+    string emailBody = check rejectRequestTemplate(data, commentText);
     EmailDetails emailDetails = generateEmailDetails(data);
     check sendEmail(emailDetails, emailBody);
 }

@@ -30,15 +30,7 @@ public type SecurityDashboardLinks record {|
 type VerifyEmailPayload record {
     # Authentication code sent by GitHub.
     string code;
-    # OAuth state issued by this backend for the signed-in user.
-    string state;
 };
-
-# State value the browser must send to GitHub and back to the verify call.
-public type GitHubOAuthStateResponse record {|
-    # One-time OAuth state
-    string state;
-|};
 
 # Comment required when rejecting a creation request.
 public type RejectRequest record {|

@@ -75,16 +75,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
         </>
       ),
       ConfirmationType.accept,
-      () => {
-        void startGitHubOAuth("/").catch(() => {
-          dispatch(
-            enqueueSnackbarMessage({
-              message: SnackMessage.error.githubConnectMessage,
-              type: "error",
-            }),
-          );
-        });
-      },
+      () => startGitHubOAuth("/"),
       "Continue",
       "Cancel",
     );
@@ -140,7 +131,7 @@ export default function Greeting({ user, roles }: GreetingProps) {
           return;
         }
     
-        const result = await dispatch(connectGitHub({ code: pendingCode, state: storedObj.state }));
+        const result = await dispatch(connectGitHub({ code: pendingCode }));
 
         if (connectGitHub.fulfilled.match(result) && result.payload.status === "verified") {
           setIsVerifiedLocally(true);

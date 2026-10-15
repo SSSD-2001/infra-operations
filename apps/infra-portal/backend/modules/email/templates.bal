@@ -544,8 +544,9 @@ public isolated function updateRequestTemplate(UpdateRequestEmailData updatedDat
 # Generates the email template for rejected repository requests.
 #
 # + data - Rejected request data
+# + commentText - Rejection reason stored with the request
 # + return - Email body or error
-public isolated function rejectRequestTemplate(RejectRequestEmailData data) returns string|error { 
+public isolated function rejectRequestTemplate(RejectRequestEmailData data, string commentText) returns string|error { 
     string websiteUrl = escapeHtml(data.websiteUrl ?: "N/A");
     string jenkinsJobType = escapeHtml(data.jenkinsJobType ?: "N/A");
     string jenkinsGroupId = escapeHtml(data.jenkinsGroupId ?: "N/A");
@@ -650,6 +651,9 @@ public isolated function rejectRequestTemplate(RejectRequestEmailData data) retu
             <p class="greeting">Hi,</p>
             <p class="body-text">
                 Your request for creating a new GitHub repository has been rejected.
+            </p>
+            <p class="body-text">
+                <span class="highlight">Reason:</span> ${escapeHtml(commentText)}
             </p>
 
             <div class="section">
