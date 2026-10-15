@@ -48,7 +48,7 @@ public isolated function createGitHubRepository(db:RepositoryRequest repoRequest
         orgName: repoRequest.organizationName,
         repoName: repoRequest.repoName,
         autoInit: true,
-        isPrivate: !repoRequest.repoType.equalsIgnoreCaseAscii("public"),
+        isPrivate: !repoRequest.repoType.equalsIgnoreCaseAscii(PUBLIC),
         repoDescription: repoRequest.description,
         repoHomepage: repoRequest.websiteUrl,
         enableIssues: repoRequest.enableIssues == "Yes" ? true : false

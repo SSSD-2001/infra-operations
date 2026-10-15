@@ -45,7 +45,7 @@ export type ConfirmationDialogContextType = {
     title: string,
     message: string | React.ReactNode,
     type: ConfirmationType,
-    action: () => void,
+    action: (value?: string) => void | Promise<void>,
     okText?: string,
     cancelText?: string,
     inputObj?: InputObj,
@@ -69,7 +69,7 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
     title: string;
     message: string | React.ReactNode;
     type: ConfirmationType;
-    action: (value?: string) => void;
+    action: (value?: string) => void | Promise<void>;
     okText?: string;
     cancelText?: string;
     inputObj?: InputObj;
@@ -84,7 +84,7 @@ const ConfirmationModalContextProvider: React.FC<ConfirmationModalContextProvide
     title: string,
     message: string | React.ReactNode,
     type: ConfirmationType,
-    action: (value?: string) => void,
+    action: (value?: string) => void | Promise<void>,
     okText?: string,
     cancelText?: string,
     inputObj?: InputObj,

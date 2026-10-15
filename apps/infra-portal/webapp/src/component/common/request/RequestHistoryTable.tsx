@@ -160,7 +160,7 @@ export default function RequestHistoryTable({
           await dispatch(
             rejectRepositoryRequest({
               id: requestId,
-              commentText: `[REJECTED]-${comment}`,
+              commentText: comment.trim(),
             }),
           ).unwrap();
           handleCloseTakeDecisionDialog();

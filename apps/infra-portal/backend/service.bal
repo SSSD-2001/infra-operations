@@ -24,7 +24,6 @@ import infra_portal.types;
 import ballerina/cache;
 import ballerina/http;
 import ballerina/log;
-import ballerina/sql;
 
 configurable SecurityDashboardLinks securityDashboardLinks = ?;
 
@@ -56,6 +55,15 @@ service class ErrorInterceptor {
     }
 }
 
+configurable string[] corsAllowedOrigins = ["http://localhost:3000"];
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: corsAllowedOrigins,
+        allowCredentials: false,
+        allowHeaders: ["Authorization", "authorization", "x-jwt-assertion", "Content-Type"],
+        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    }
+}
 service http:InterceptableService / on new http:Listener(8090) {
 
     # Request interceptor.
@@ -2209,92 +2217,4 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         return result;
     }
-}
-
-isolated function canReadRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
-    returns boolean {
-
-    if authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
-        return true;
-    }
-    return userInfo.email.equalsIgnoreCaseAscii(request.email)
-        || userInfo.email.equalsIgnoreCaseAscii(request.leadEmail);
-}
-
-isolated function canReviewRepositoryRequest(authorization:CustomJwtPayload userInfo, db:RepositoryRequest request)
-    returns boolean {
-
-    if authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
-        return true;
-    }
-    return authorization:checkPermissions([authorization:authorizedRoles.approver], userInfo.groups)
-        && userInfo.email.equalsIgnoreCaseAscii(request.leadEmail);
-}
-
-isolated function validateLeadEmail(string leadEmail) returns http:BadRequest|http:InternalServerError? {
-    db:TeamLead[]|error leads = db:getLeads();
-    if leads is error {
-        log:printError("Error while retrieving functional leads!", leads);
-        return <http:InternalServerError>{
-            body: {
-                message: "Error while retrieving functional leads!"
-            }
-        };
-    }
-    foreach db:TeamLead lead in leads {
-        if lead.leadEmail.equalsIgnoreCaseAscii(leadEmail) {
-            return;
-        }
-    }
-    return <http:BadRequest>{
-        body: {
-            message: "leadEmail is not a configured functional lead."
-        }
-    };
-}
-
-isolated function normalizeRepositoryType(string repoType) returns string|http:BadRequest {
-    if repoType.equalsIgnoreCaseAscii("public") {
-        return "Public";
-    }
-    if repoType.equalsIgnoreCaseAscii("private") {
-        return "Private";
-    }
-    return <http:BadRequest>{
-        body: {
-            message: "Repository type must be Public or Private."
-        }
-    };
-}
-
-isolated function validateRepositoryType(int organizationId, string repoType)
-    returns http:BadRequest|http:InternalServerError? {
-
-    db:Organization|error organization = db:getOrganizationById(organizationId);
-    if organization is sql:NoRowsError {
-        return <http:BadRequest>{
-            body: {
-                message: "Organization was not found."
-            }
-        };
-    }
-    if organization is error {
-        log:printError("Error while retrieving organization!", organization);
-        return <http:InternalServerError>{
-            body: {
-                message: "Error while retrieving organization!"
-            }
-        };
-    }
-    boolean privateOrg = organization.organizationVisibility.equalsIgnoreCaseAscii("private");
-    boolean publicOrg = organization.organizationVisibility.equalsIgnoreCaseAscii("public");
-    boolean freePlan = organization.organizationPlan.equalsIgnoreCaseAscii("free");
-    if (privateOrg && repoType == "Public") || ((freePlan || publicOrg) && repoType == "Private") {
-        return <http:BadRequest>{
-            body: {
-                message: "Repository type is not allowed for this organization."
-            }
-        };
-    }
-    return;
 }
