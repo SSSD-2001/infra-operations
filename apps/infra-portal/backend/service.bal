@@ -55,15 +55,6 @@ service class ErrorInterceptor {
     }
 }
 
-configurable string[] corsAllowedOrigins = ["http://localhost:3000"];
-@http:ServiceConfig {
-    cors: {
-        allowOrigins: corsAllowedOrigins,
-        allowCredentials: false,
-        allowHeaders: ["Authorization", "authorization", "x-jwt-assertion", "Content-Type"],
-        allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-    }
-}
 service http:InterceptableService / on new http:Listener(8090) {
 
     # Request interceptor.
