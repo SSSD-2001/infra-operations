@@ -108,7 +108,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "http"
-version = "2.16.6"
+version = "2.16.9"
 dependencies = [
 	{org = "ballerina", name = "auth"},
 	{org = "ballerina", name = "cache"},
@@ -306,7 +306,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "observe"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
 	{org = "ballerina", name = "jballerina.java"}
 ]
@@ -397,7 +397,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "websocket"
-version = "2.15.5"
+version = "2.15.7"
 dependencies = [
 	{org = "ballerina", name = "auth"},
 	{org = "ballerina", name = "constraint"},
@@ -492,6 +492,7 @@ modules = [
 	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.email"},
 	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.entity"},
 	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.github"},
-	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.scim"}
+	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.scim"},
+	{org = "wso2", packageName = "infra_portal", moduleName = "infra_portal.types"}
 ]
 

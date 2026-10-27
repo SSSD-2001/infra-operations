@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/sql;
+import infra_portal.types;
 
 # Query to get a specific repository request by id.
 #
@@ -774,9 +775,9 @@ isolated function deleteDefaultTeamQuery(int teamId) returns sql:ParameterizedQu
 # Upsert user default repository access by employee id.
 #
 # + employeeId - HR employee id
-# + status - Status of the default access (not_granted, granting, granted)
+# + status - Status of the default access
 # + return - Parameterized upsert query
-isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, string status)
+isolated function upsertUserDefaultRepositoryAccessQuery(string employeeId, types:DefaultAccessStatus status)
     returns sql:ParameterizedQuery => `
     INSERT INTO user_default_repository_access (employee_id, status)
     VALUES (${employeeId}, ${status})
@@ -794,18 +795,23 @@ isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
     WHERE employee_id = ${employeeId}
 `;
 
-# Get default org/team rows by access type (PERMANENT | CS | INTERN).
+# Get default org/team rows for an employment type.
+# A null department on the row applies to every department.
+# A set department applies only when it matches the employee.
 #
-# + accessType - Access category filter
+# + employmentType - Employment type filter
+# + department - Employee department; null matches only the default rows
 # + return - Parameterized select query
-isolated function getOrganizationDefaultRepositoriesByAccessTypeQuery(string accessType)
+isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType employmentType, string? department)
     returns sql:ParameterizedQuery => `
     SELECT
         org_name,
         team_slug,
-        access_type
+        employment_type,
+        department
     FROM organizations_default_repositories
-    WHERE access_type = ${accessType}
+    WHERE employment_type = ${employmentType}
+        AND (department IS NULL OR department = ${department})
 `;
 
 # Get an access request by id.

@@ -115,7 +115,7 @@ const AppAuthProvider = (props: { children: React.ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        if (appState === AppState.Authenticated && state.isAuthenticated) {
+        if (appState === AppState.Authenticated) {
           return;
         }
     

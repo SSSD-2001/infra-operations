@@ -398,8 +398,9 @@ public type OrganizationAndTeam record {
 public type TeamRepository record {|
     # Repository name
     string name;
-    # HTML URL of the repository
-    string url;
+    # HTML URL
+    @jsondata:Name {value: "html_url"}
+    string htmlUrl;
     json...;
 |};
 

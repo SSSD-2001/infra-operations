@@ -21,8 +21,3 @@ const string EXTERNAL_COMMITTER_TEAM_SLUG = "wso2-external-committers";
 const string WSO2_ALL_TEAM_SLUG = "wso2-all";
 const string WSO2_ALL_INTERNS_TEAM_SLUG = "wso2-all-interns";
 const string READONLY_TEAM_SLUG = "wso2-readonly";
-
-# Employment type values as returned by the HR entity (uppercase enum-style).
-const string PERMANENT = "PERMANENT";
-const string INTERNSHIP = "INTERNSHIP";
-const string CUSTOMER_SUCCESS_DEPARTMENT = "CUSTOMER SUCCESS";

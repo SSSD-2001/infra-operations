@@ -15,8 +15,11 @@ import {
     useTheme,
 } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
-import { fetchDefaultRepositoryAccess,setDefaultRepositoryAccess } from "@slices/githubOauthAppSlice/githubOauth";
 import { fetchAccessRequests, AccessRequestState } from "@slices/accessRequestSlice/accessRequest";
+import {
+    fetchDefaultRepositoryAccess,
+    setDefaultRepositoryAccess,
+  } from "@slices/githubOauthAppSlice/githubOauth";
 import { fetchRepositoryRequests, RequestApprovalState } from "@slices/repositoryRequestSlice/repositoryRequest";
 import { useAppDispatch, useAppSelector } from "@slices/store";
 import { State } from "@/types/types";
@@ -35,80 +38,38 @@ export default function DefaultRepositoryAccessSection() {
     const fetchState = useAppSelector((s) => s.githubConnect.defaultAccessFetchState);
     const defaultAccessState = useAppSelector((s) => s.githubConnect.defaultAccessState);
     const fetchErrorMessage = useAppSelector((s) => s.githubConnect.defaultAccessErrorMessage);
+    const accessRequests = useAppSelector((s) => s.accessRequest.accessRequests);
+    const workEmail = useAppSelector((s) => s.user.userInfo?.workEmail);
+    const creationRequests = useAppSelector((s) => s.repositoryRequest.repositoryRequests?.repositoryRequests) ?? [];
     const grantAttemptedRef = useRef(false);
     const pollAttemptsRef = useRef(0);
     const pollInFlightRef = useRef(false);
     const [pollTimedOut, setPollTimedOut] = useState(false);
     const [expandedOrg, setExpandedOrg] = useState<string | false>(false);
-    const accessRequests = useAppSelector((s) => s.accessRequest.accessRequests);
-    const workEmail = useAppSelector((s) => s.user.userInfo?.workEmail);
-    const creationRequests = useAppSelector((s) => s.repositoryRequest.repositoryRequests?.repositoryRequests) ?? [];
-    const defaultOrgNames = new Set(organizations.map((o) => o.orgName));
-
-    const { isConnected } = resolveGitHubConnectionStatus(null, {
-        jwtGithubUserId,
-        githubUsername,
-    });
-
-    useEffect(() => {
-        if (!isConnected || !workEmail) return;
-        void dispatch(fetchAccessRequests());
-        void dispatch(
-          fetchRepositoryRequests({
-            memberEmail: workEmail,
-            limit: 100,
-            offset: 0,
-          }),
-        );
-    }, [isConnected, workEmail, dispatch]);
 
     const handleChange =
         (orgName: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
             setExpandedOrg(isExpanded ? orgName : false);
         };
 
-    const [grantFailed, setGrantFailed] = useState(false);
-
-    const approvedAccessByOrg = new Map<string, { name: string; htmlUrl: string }[]>();
-    accessRequests
-    .filter((r) => r.state === AccessRequestState.APPROVED)
-    .forEach((r) => {
-        const list = approvedAccessByOrg.get(r.orgName) ?? [];
-        if (!list.some((repo) => repo.name === r.repoName)) {
-        list.push({
-            name: r.repoName,
-            htmlUrl: `https://github.com/${r.orgName}/${r.repoName}`,
-        });
-        }
-        approvedAccessByOrg.set(r.orgName, list);
+    const { isConnected } = resolveGitHubConnectionStatus(null, {
+        jwtGithubUserId,
+        githubUsername,
     });
 
-    creationRequests
-        .filter((r) => r.state === RequestApprovalState.APPROVED)
-        .forEach((r) => {
-            const list = approvedAccessByOrg.get(r.organizationName) ?? [];
-            if (!list.some((repo) => repo.name === r.repoName)) {
-            list.push({
-                name: r.repoName,
-                htmlUrl: `https://github.com/${r.organizationName}/${r.repoName}`,
-            });
-            }
-            approvedAccessByOrg.set(r.organizationName, list);
-        });
+    const [grantFailed, setGrantFailed] = useState(false);
 
-    const overviewOrgs = organizations;
-
-    const defaultReposByOrg = new Map(
-        organizations.map((org) => [org.orgName, new Set(org.repositories.map((r) => r.name))]),
-      );
-      
-    const extraOrgs = [...approvedAccessByOrg.entries()]
-        .map(([orgName, repos]) => ({
-          orgName,
-          avatarUrl: organizations.find((o) => o.orgName === orgName)?.avatarUrl ?? "",
-          repositories: repos.filter((repo) => !defaultReposByOrg.get(orgName)?.has(repo.name)),
-        }))
-        .filter((org) => org.repositories.length > 0);
+    useEffect(() => {
+        if (!isConnected || !workEmail) return;
+        void dispatch(fetchAccessRequests());
+        void dispatch(
+            fetchRepositoryRequests({
+                memberEmail: workEmail,
+                limit: 100,
+                offset: 0,
+            }),
+        );
+    }, [isConnected, workEmail, dispatch]);
 
     useEffect(() => {
         if (!isConnected) return;
@@ -255,6 +216,44 @@ export default function DefaultRepositoryAccessSection() {
         );
     }
 
+    const approvedAccessByOrg = new Map<string, { name: string; htmlUrl: string }[]>();
+    accessRequests
+        .filter((request) => request.state === AccessRequestState.APPROVED)
+        .forEach((request) => {
+            const list = approvedAccessByOrg.get(request.orgName) ?? [];
+            if (!list.some((repo) => repo.name === request.repoName)) {
+                list.push({
+                    name: request.repoName,
+                    htmlUrl: `https://github.com/${request.orgName}/${request.repoName}`,
+                });
+            }
+            approvedAccessByOrg.set(request.orgName, list);
+        });
+
+    creationRequests
+        .filter((request) => request.state === RequestApprovalState.APPROVED)
+        .forEach((request) => {
+            const list = approvedAccessByOrg.get(request.organizationName) ?? [];
+            if (!list.some((repo) => repo.name === request.repoName)) {
+                list.push({
+                    name: request.repoName,
+                    htmlUrl: `https://github.com/${request.organizationName}/${request.repoName}`,
+                });
+            }
+            approvedAccessByOrg.set(request.organizationName, list);
+        });
+
+    const defaultReposByOrg = new Map(
+        organizations.map((org) => [org.orgName, new Set(org.repositories.map((repo) => repo.name))]),
+    );
+    const extraOrgs = [...approvedAccessByOrg.entries()]
+        .map(([orgName, repos]) => ({
+            orgName,
+            avatarUrl: organizations.find((org) => org.orgName === orgName)?.avatarUrl ?? "",
+            repositories: repos.filter((repo) => !defaultReposByOrg.get(orgName)?.has(repo.name)),
+        }))
+        .filter((org) => org.repositories.length > 0);
+
     return (
         <Box
             sx={{
@@ -264,7 +263,7 @@ export default function DefaultRepositoryAccessSection() {
                 overflow: "hidden",
             }}
         >
-            {overviewOrgs.map((org) => (
+            {organizations.map((org) => (
                 <Accordion
                     key={org.orgName}
                     expanded={expandedOrg === org.orgName}
@@ -302,9 +301,9 @@ export default function DefaultRepositoryAccessSection() {
                         <Avatar
                             src={org.avatarUrl}
                             alt={org.orgName}
-                            sx={{ width: 18, height: 18, borderRadius: "4px", flexShrink: 0 }}
+                            sx={{ width: 28, height: 28, borderRadius: "7px", flexShrink: 0 }}
                         >
-                            <GitHubIcon sx={{ fontSize: 11 }} />
+                            <GitHubIcon sx={{ fontSize: 16 }} />
                         </Avatar>
                         <Box
                             sx={{
@@ -316,39 +315,40 @@ export default function DefaultRepositoryAccessSection() {
                             }}
                         >
                             <Typography
-                                variant="body2"
                                 component="span"
                                 noWrap
-                                sx={{ color: theme.palette.customText.primary.p1.active }}
+                                sx={{
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    color: theme.palette.customText.primary.p1.active,
+                                }}
                             >
                                 {org.orgName}
                             </Typography>
-                            {defaultOrgNames.has(org.orgName) && (
-                                <Chip
-                                    label="Default"
-                                    size="small"
-                                    sx={{
-                                        height: "18px",
-                                        borderRadius: "15px",
-                                        fontSize: 10,
-                                        fontWeight: 500,
-                                        fontFamily: "monospace",
-                                        background: alpha(theme.palette.neutral["1200"] ?? theme.palette.grey[600], 0.12),
-                                        color: theme.palette.customText.primary.p3.active,
-                                        border: `1px solid ${alpha(theme.palette.grey[500], 0.35)}`,
-                                        flexShrink: 0,
-                                        "& .MuiChip-label": {
-                                            px: 1.25,
-                                            py: 0.5,
-                                        },
-                                    }}
-                                />
-                            )}
+                            <Chip
+                                label="Default"
+                                size="small"
+                                sx={{
+                                    height: "18px",
+                                    borderRadius: "15px",
+                                    fontSize: 10,
+                                    fontWeight: 500,
+                                    fontFamily: "monospace",
+                                    background: alpha(theme.palette.neutral["1200"] ?? theme.palette.grey[600], 0.12),
+                                    color: theme.palette.customText.primary.p3.active,
+                                    border: `1px solid ${alpha(theme.palette.grey[500], 0.35)}`,
+                                    flexShrink: 0,
+                                    "& .MuiChip-label": {
+                                        px: 1.25,
+                                        py: 0.5,
+                                    },
+                                }}
+                            />
                         </Box>
                         <Typography
-                            variant="body2"
                             component="span"
                             sx={{
+                                fontSize: 11,
                                 color: theme.palette.customText.primary.p3.active,
                                 flexShrink: 0,
                                 mr: 1,
@@ -362,19 +362,21 @@ export default function DefaultRepositoryAccessSection() {
                         {org.repositories.length === 0 ? (
                             <Typography
                                 variant="body2"
-                                sx={{ color: theme.palette.customText.primary.p3.active }}
+                                sx={{ fontSize: 12, color: theme.palette.customText.primary.p3.active }}
                             >
                                 No repositories available for this organization yet.
                             </Typography>
                         ) : (
                             org.repositories.map((repo) => (
-                                <Typography key={repo.name} variant="body2" component="div" sx={{ py: 0.5, pl: 5.5 }}>
+                                <Typography key={repo.name} component="div" sx={{ py: 0.5, pl: 5.5 }}>
                                     <Link
                                         href={repo.htmlUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         underline="hover"
                                         sx={{
+                                            fontSize: 12,
+                                            fontWeight: 600,
                                             color: theme.palette.customText.primary.p1.active,
                                             "&:hover": { color: theme.palette.primary.main },
                                         }}
@@ -425,9 +427,9 @@ export default function DefaultRepositoryAccessSection() {
                         <Avatar
                             src={org.avatarUrl}
                             alt={org.orgName}
-                            sx={{ width: 18, height: 18, borderRadius: "4px", flexShrink: 0 }}
+                            sx={{ width: 28, height: 28, borderRadius: "7px", flexShrink: 0 }}
                         >
-                            <GitHubIcon sx={{ fontSize: 11 }} />
+                            <GitHubIcon sx={{ fontSize: 16 }} />
                         </Avatar>
                         <Box
                             sx={{
@@ -439,10 +441,13 @@ export default function DefaultRepositoryAccessSection() {
                             }}
                         >
                             <Typography
-                                variant="body2"
                                 component="span"
                                 noWrap
-                                sx={{ color: theme.palette.customText.primary.p1.active }}
+                                sx={{
+                                    fontSize: 13,
+                                    fontWeight: 500,
+                                    color: theme.palette.customText.primary.p1.active,
+                                }}
                             >
                                 {org.orgName}
                             </Typography>
@@ -467,9 +472,9 @@ export default function DefaultRepositoryAccessSection() {
                             />
                         </Box>
                         <Typography
-                            variant="body2"
                             component="span"
                             sx={{
+                                fontSize: 11,
                                 color: theme.palette.customText.primary.p3.active,
                                 flexShrink: 0,
                                 mr: 1,
@@ -481,13 +486,15 @@ export default function DefaultRepositoryAccessSection() {
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 2.25, pt: 0, pb: 1.5 }}>
                         {org.repositories.map((repo) => (
-                            <Typography key={repo.name} variant="body2" component="div" sx={{ py: 0.5, pl: 5.5 }}>
+                            <Typography key={repo.name} component="div" sx={{ py: 0.5, pl: 5.5 }}>
                                 <Link
                                     href={repo.htmlUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     underline="hover"
                                     sx={{
+                                        fontSize: 12,
+                                        fontWeight: 600,
                                         color: theme.palette.customText.primary.p1.active,
                                         "&:hover": { color: theme.palette.primary.main },
                                     }}

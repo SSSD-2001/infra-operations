@@ -16,6 +16,7 @@
 
 import ballerina/sql;
 import ballerinax/mysql;
+import infra_portal.types;
 
 # [Configurable] database configs.
 type DatabaseConfig record {|
@@ -326,9 +327,9 @@ public type UserDefaultRepositoryAccess record {|
     # HR employee id
     @sql:Column {name: "employee_id"}
     string employeeId;
-    # Default access status: not_granted, granting, or granted
+    # Default access status
     @sql:Column {name: "status"}
-    string status;
+    types:DefaultAccessStatus status;
 |};
 
 # Row from organizations_default_repositories.
@@ -339,9 +340,12 @@ public type OrganizationDefaultRepository record {|
     # Team slug in the organization
     @sql:Column {name: "team_slug"}
     string teamSlug;
-    # Access category: PERMANENT, CS, or INTERN
-    @sql:Column {name: "access_type"}
-    string accessType;
+    # Employment type this row applies to
+    @sql:Column {name: "employment_type"}
+    string employmentType;
+    # Department this row applies to; null means every department of that employment type
+    @sql:Column {name: "department"}
+    string? department;
 |};
 
 # Row from access_requests.

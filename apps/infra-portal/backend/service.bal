@@ -19,6 +19,7 @@ import infra_portal.email;
 import infra_portal.entity;
 import infra_portal.github as gh;
 import infra_portal.scim;
+import infra_portal.types;
 
 import ballerina/cache;
 import ballerina/http;
@@ -128,12 +129,10 @@ service http:InterceptableService / on httpListener {
 
         string? githubUserId = userInfo.githubUserId;
         string? githubUsername = ();
-        boolean githubLookupFailed = false;
         if githubUserId is string {
             gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
             if githubUser is error {
                 // The GitHub username is supplementary, so degrade instead of failing the profile.
-                githubLookupFailed = true;
                 log:printWarn("Error while fetching GitHub username for user-info!",
                         'error = githubUser, email = userInfo.email);
             } else {
@@ -141,32 +140,15 @@ service http:InterceptableService / on httpListener {
             }
         }
 
-        UserInfoResponse userInfoResponse = {
-            employeeId: loggedInUser.employeeId,
-            workEmail: loggedInUser.workEmail,
-            firstName: loggedInUser.firstName,
-            lastName: loggedInUser.lastName,
-            jobRole: loggedInUser.jobRole,
-            employeeThumbnail: loggedInUser.employeeThumbnail,
-            department: loggedInUser.department,
-            team: loggedInUser.team,
-            employmentType: loggedInUser.employmentType,
-            privileges,
-            githubUserId,
-            githubUsername
-        };
+        UserInfoResponse userInfoResponse = {...loggedInUser, privileges, githubUserId, githubUsername};
 
-        // Avoid caching a profile with a missing GitHub username so the next call can retry.
-        if !githubLookupFailed {
-            error? cacheError = cache.put(userInfo.email, userInfoResponse);
-            if cacheError is error {
-                log:printWarn("An error occurred while writing user info to the cache", cacheError);
-            }
+        error? cacheError = cache.put(userInfo.email, userInfoResponse);
+        if cacheError is error {
+            log:printWarn("An error occurred while writing user info to the cache", cacheError);
         }
 
         return userInfoResponse;
     }
-
     # Fetch employee information.
     #
     # + ctx - Request object
@@ -2046,97 +2028,62 @@ service http:InterceptableService / on httpListener {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        db:UserDefaultRepositoryAccess|error? result =
-            db:getUserDefaultRepositoryAccess(employee.employeeId);
+        db:UserDefaultRepositoryAccess|error? result = db:getUserDefaultRepositoryAccess(employee.employeeId);
         if result is error {
             string customError = "Error while reading default repository access!";
             log:printError(customError, result, employeeId = employee.employeeId);
             return <http:InternalServerError>{body: {message: customError}};
         }
         if result is () {
-            return {status: "not_granted", organizations: []};
+            return {status: types:NOT_GRANTED, organizations: []};
         }
-        if result.status != "granted" {
+        if result.status != types:GRANTED {
             return {status: result.status, organizations: []};
         }
 
-        gh:OrganizationAndTeam[] orgTeams = [];
-        if employee.employmentType == PERMANENT {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType("PERMANENT");
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-
-            if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
-                db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType("CS");
-                if csRepos is error {
-                    string customError = "Error while reading default organization repositories!";
-                    log:printError(customError, csRepos);
-                    return <http:InternalServerError>{body: {message: customError}};
-                }
-                foreach db:OrganizationDefaultRepository row in csRepos {
-                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
-                }
-            }
-        } else if employee.employmentType == INTERNSHIP {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType("INTERN");
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-        } else {
-            return {status: "granted", organizations: []};
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
+            return {status: types:GRANTED, organizations: []};
         }
+        types:EmploymentType employmentType = rawEmploymentType;
+
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         map<DefaultAccessRepository[]> reposByOrg = {};
         foreach gh:OrganizationAndTeam ot in orgTeams {
             gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(ot.orgName, ot.teamSlug);
             if teamRepos is error {
-                log:printWarn(
-                    "Failed to list team repos; skipping team",
-                    teamRepos,
-                    org = ot.orgName,
-                    team = ot.teamSlug
-                );
+                log:printWarn("Failed to list team repos; skipping team", teamRepos,
+                    org = ot.orgName, team = ot.teamSlug);
                 continue;
             }
             if !reposByOrg.hasKey(ot.orgName) {
                 reposByOrg[ot.orgName] = [];
             }
             DefaultAccessRepository[] existing = reposByOrg.get(ot.orgName);
-            map<boolean> seen = {};
-            foreach DefaultAccessRepository r in existing {
-                seen[r.name] = true;
-            }
-            foreach gh:TeamRepository repo in teamRepos {
-                if seen.hasKey(repo.name) {
-                    continue;
-                }
-                seen[repo.name] = true;
-                existing.push({name: repo.name, htmlUrl: repo.url});
-            }
-            reposByOrg[ot.orgName] = existing;
+            DefaultAccessRepository[] newRepos =
+                from gh:TeamRepository {name, htmlUrl} in teamRepos
+                where !existing.some(repo => repo.name == name)
+                select {name, htmlUrl};
+            reposByOrg[ot.orgName] = [...existing, ...newRepos];
         }
 
-        DefaultAccessOrganization[] organizations = [];
-        foreach string orgName in reposByOrg.keys() {
-            organizations.push({
-                orgName: orgName,
+        DefaultAccessOrganization[] organizations =
+            from [string, DefaultAccessRepository[]] [orgName, repositories] in reposByOrg.entries()
+            select {
+                orgName,
                 avatarUrl: string `https://github.com/${orgName}.png`,
-                repositories: reposByOrg.get(orgName)
-            });
-        }
-        return {status: "granted", organizations};
+                repositories
+            };
+        return {status: types:GRANTED, organizations};
     
     }
     # Set default repository access for a GitHub user based on their employment type and department.
@@ -2200,42 +2147,9 @@ service http:InterceptableService / on httpListener {
         }
         string gitHubUserName = githubUser.login;
 
-        gh:OrganizationAndTeam[] orgTeams = [];
-        if employee.employmentType == PERMANENT {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType("PERMANENT");
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-
-            if employee.department == CUSTOMER_SUCCESS_DEPARTMENT {
-                db:OrganizationDefaultRepository[]|error csRepos =
-                    db:getOrganizationDefaultRepositoriesByAccessType("CS");
-                if csRepos is error {
-                    string customError = "Error while reading default organization repositories!";
-                    log:printError(customError, csRepos);
-                    return <http:InternalServerError>{body: {message: customError}};
-                }
-                foreach db:OrganizationDefaultRepository row in csRepos {
-                    orgTeams.push({orgName: row.orgName, teamSlug: row.teamSlug});
-                }
-            }
-        } else if employee.employmentType == INTERNSHIP {
-            db:OrganizationDefaultRepository[]|error orgRepos =
-                db:getOrganizationDefaultRepositoriesByAccessType("INTERN");
-            if orgRepos is error {
-                string customError = "Error while reading default organization repositories!";
-                log:printError(customError, orgRepos);
-                return <http:InternalServerError>{body: {message: customError}};
-            }
-            orgTeams = from var row in orgRepos
-                select {orgName: row.orgName, teamSlug: row.teamSlug};
-        } else {
-            string actualType = employee.employmentType ?: "null";
+        string? rawEmploymentType = employee.employmentType;
+        if rawEmploymentType !is types:EmploymentType {
+            string actualType = rawEmploymentType ?: "null";
             string customError = string `No team membership changes made as the employment type does not match any criteria. employmentType=${actualType}`;
             log:printError(customError, email = userInfo.email, employmentType = actualType);
             return <http:InternalServerError>{
@@ -2244,6 +2158,17 @@ service http:InterceptableService / on httpListener {
                 }
             };
         }
+        types:EmploymentType employmentType = rawEmploymentType;
+
+        db:OrganizationDefaultRepository[]|error orgRepos =
+            db:getOrganizationDefaultRepositories(employmentType, employee.department);
+        if orgRepos is error {
+            string customError = "Error while reading default organization repositories!";
+            log:printError(customError, orgRepos);
+            return <http:InternalServerError>{body: {message: customError}};
+        }
+        gh:OrganizationAndTeam[] orgTeams = from db:OrganizationDefaultRepository row in orgRepos
+            select {orgName: row.orgName, teamSlug: row.teamSlug};
 
         if orgTeams.length() == 0 {
             string customError = "No default organization repositories configured for this employment type!";
@@ -2251,7 +2176,8 @@ service http:InterceptableService / on httpListener {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        gh:AddOrUpdateTeamMemberInformationInput[] inputs = from var organizationAndTeam in orgTeams
+        gh:AddOrUpdateTeamMemberInformationInput[] inputs =
+            from gh:OrganizationAndTeam organizationAndTeam in orgTeams
             select {
                 orgName: organizationAndTeam.orgName,
                 teamSlug: organizationAndTeam.teamSlug,
@@ -2259,7 +2185,7 @@ service http:InterceptableService / on httpListener {
                 role: gh:MEMBER
             };
 
-        error? grantingResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, "granting");
+        error? grantingResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:GRANTING);
         if grantingResult is error {
             string customError = "Error while updating default repository access status!";
             log:printError(customError, grantingResult, employeeId = employee.employeeId);
@@ -2268,7 +2194,7 @@ service http:InterceptableService / on httpListener {
 
         gh:AddOrUpdateTeamMemberResponse|error membershipResult = gh:addOrUpdateTeamMemberships(inputs);
         if membershipResult is error {
-            error? resetResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, "not_granted");
+        error? resetResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, types:NOT_GRANTED);
             if resetResult is error {
                 log:printError("Failed to reset default access status after GitHub error", resetResult,
                     employeeId = employee.employeeId);
@@ -2278,10 +2204,9 @@ service http:InterceptableService / on httpListener {
             return <http:InternalServerError>{body: {message: customError}};
         }
 
-        string status = membershipResult.failedMemberships.length() == 0 &&
-            membershipResult.successfulMemberships.length() > 0 ? "granted" : "not_granted";
+        types:DefaultAccessStatus status = membershipResult.failedMemberships.length() == 0 &&
+            membershipResult.successfulMemberships.length() > 0 ? types:GRANTED : types:NOT_GRANTED;
         error? dbResult = db:upsertUserDefaultRepositoryAccess(employee.employeeId, status);
-        
         if dbResult is error {
             string customError = "Default access applied on GitHub, but failed to update access record in DB!";
             log:printError(customError, dbResult, employeeId = employee.employeeId);
@@ -2489,7 +2414,7 @@ service http:InterceptableService / on httpListener {
             log:printError("Error while reading default repository access!", defaultAccess);
             return <http:InternalServerError>{body: {message: "Error while reading default repository access!"}};
         }
-        if defaultAccess is () || defaultAccess.status != "granted" {
+        if defaultAccess is () || defaultAccess.status != types:GRANTED {
             return <http:BadRequest>{
                 body: {message: "Default repository access must be granted before requesting repo access."}
             };
@@ -2644,5 +2569,4 @@ service http:InterceptableService / on httpListener {
         }
         return result;
     }
-
 }
