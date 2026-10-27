@@ -122,6 +122,7 @@ export default function OrganizationsTable({ gridArea }: { gridArea?: string }) 
           dispatch(fetchOrganizations());
           await dispatch(fetchRepoTeamLeads());
         } catch {
+          // Handled in thunk
         }
       },
       "Delete",

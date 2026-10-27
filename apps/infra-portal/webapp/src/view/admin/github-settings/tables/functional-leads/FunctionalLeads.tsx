@@ -256,7 +256,7 @@ export default function FunctionalLeads({ gridArea }: { gridArea?: string }) {
   }
 
   return (
-    <Box sx={{ gridArea, minWidth: 0, overflow: "hidden" }}>
+    <Box sx={{ gridArea }}>
       <BackgroundLoader open={isMutating} message={leadsState.errorMessage} />
       <Box
         sx={{

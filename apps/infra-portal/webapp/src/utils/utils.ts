@@ -35,15 +35,13 @@ function getCrossItems<Role>(a: Role[], b: Role[]): Role[] {
 
 export const formatDateTime = (dateTimeStr: string | null | undefined): string => {
   if (!dateTimeStr) return "N/A";
-  const trimmed = dateTimeStr.trim();
-  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed);
-  const localDate = new Date(hasTimezone ? trimmed : `${trimmed} UTC`);
-  if (isNaN(localDate.getTime())) return "N/A";
-  const day = String(localDate.getDate()).padStart(2, "0");
-  const month = String(localDate.getMonth() + 1).padStart(2, "0");
-  const year = localDate.getFullYear();
-  const hours = String(localDate.getHours()).padStart(2, "0");
-  const minutes = String(localDate.getMinutes()).padStart(2, "0");
+  const utcDate = new Date(dateTimeStr + " UTC");
+  if (isNaN(utcDate.getTime())) return "N/A";
+  const day = String(utcDate.getDate()).padStart(2, "0");
+  const month = String(utcDate.getMonth() + 1).padStart(2, "0");
+  const year = utcDate.getFullYear();
+  const hours = String(utcDate.getHours()).padStart(2, "0");
+  const minutes = String(utcDate.getMinutes()).padStart(2, "0");
   return `${year}-${month}-${day}, ${hours}:${minutes}`;
 };
 

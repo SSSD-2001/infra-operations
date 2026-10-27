@@ -15,7 +15,7 @@
 // under the License.
 import { createSlice } from "@reduxjs/toolkit";
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import axios, { AxiosResponse, HttpStatusCode } from "axios";
+import axios, { HttpStatusCode } from "axios";
 
 import { State } from "@/types/types";
 import { AppConfig } from "@config/config";
@@ -207,12 +207,17 @@ export const addRepositoryRequests = createAsyncThunk<
   },
 );
 
-export const rejectRepositoryRequest = createAsyncThunk<void, number, { rejectValue: string }>(
+export const rejectRepositoryRequest = createAsyncThunk<
+  void,
+  { id: number; commentText: string },
+  { rejectValue: string }
+>(
   "repositoryRequest/rejectRepositoryRequest",
-  async (id: number, { dispatch, rejectWithValue }) => {
+  async ({ id, commentText }, { dispatch, rejectWithValue }) => {
     try {
       const response = await APIService.getInstance().patch(
         `${AppConfig.serviceUrls.repositoryRequests}/${id}/reject`,
+        { commentText },
       );
       dispatch(
         enqueueSnackbarMessage({
@@ -404,7 +409,7 @@ const RepositoryRequestSlice = createSlice({
       .addCase(approveRepositoryRequest.pending, (state) => {
         state.submitState = State.loading;
         state.functionType = "approve";
-        state.errorMessage = "Approving Repository Requests...";
+        state.errorMessage = "Approving repositoryRequests...";
       })
       .addCase(approveRepositoryRequest.fulfilled, (state) => {
         state.submitState = State.idle;

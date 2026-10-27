@@ -1,0 +1,29 @@
+[email_group_manager.google_sdk]
+defaultUser = ""
+privateGroupUser = ""
+publicGroupUser = ""
+
+[email_group_manager.authorization.authorizedRoles]
+ADMIN_ROLE = ""
+EMPLOYEE_ROLE = [""]
+
+[email_group_manager.people]
+peopleEndpoint = ""
+
+[email_group_manager.people.clientAuthConfig]
+clientId = ""
+clientSecret = ""
+tokenUrl = "https://api.asgardeo.io/t/wso2/oauth2/token"
+
+[email_group_manager.google_sdk.config]
+audience = "https://oauth2.googleapis.com/token"
+certPath = ""
+issuer = ""
+keyAlias = ""
+keyPassword = ""
+password = ""
+scopes = "https://www.googleapis.com/auth/admin.directory.group.readonly https://www.googleapis.com/auth/admin.directory.group.member https://www.googleapis.com/auth/admin.directory.user.readonly"
+subject = ""
+
+[email_group_manager.utils]
+emailDomain = ""

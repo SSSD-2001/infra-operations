@@ -18,8 +18,8 @@ import {
   BookKey,
   BookMarked,
   ClipboardList,
-  Eye,
   GitPullRequest,
+  Eye,
   HomeIcon,
   Settings,
   Shield,
@@ -68,8 +68,15 @@ export const routes: RouteObjectWithRole[] = [
     allowRoles: [Role.EMPLOYEE],
     children: [
       {
+        path: "repository-requests",
+        text: "Repository Requests",
+        icon: React.createElement(BookMarked),
+        element: React.createElement(View.repositoryCreationRequests),
+        allowRoles: [Role.EMPLOYEE],
+      },
+      {
         path: "repository-access-requests",
-        text: "Repository Access",
+        text: "Repository Access Requests",
         icon: React.createElement(BookKey),
         element: React.createElement(View.repositoryAccessRequests),
         allowRoles: [Role.EMPLOYEE],
@@ -82,13 +89,6 @@ export const routes: RouteObjectWithRole[] = [
         allowRoles: [Role.EMPLOYEE],
       },
       {
-        path: "repository-requests",
-        text: "New Repository", 
-        icon: React.createElement(BookMarked),
-        element: React.createElement(View.repositoryCreationRequests),
-        allowRoles: [Role.EMPLOYEE],
-      },
-      {
         path: "my-requests",
         text: "My Requests",
         icon: React.createElement(ClipboardList),
@@ -97,7 +97,7 @@ export const routes: RouteObjectWithRole[] = [
       },
       {
         path: "review-repository-requests",
-        text: "Review Requests", 
+        text: "Review Repository Requests",
         icon: React.createElement(Eye),
         element: React.createElement(View.reviewRequests),
         allowRoles: [Role.ADMIN, Role.APPROVER],

@@ -15,7 +15,6 @@
 // under the License.
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios, { HttpStatusCode } from "axios";
-
 import { AppConfig } from "@config/config";
 import { SnackMessage } from "@config/constant";
 import { State } from "@root/src/types/types";

@@ -52,7 +52,6 @@ import CommentSection from "@component/common/comment/CommentSection";
 import RepoRequestForm from "@component/common/request/RepoRequestForm";
 import RepositoryRequestDetails from "@component/common/request/RepositoryRequestDetails";
 import { useConfirmationModalContext } from "@context";
-import { addComments } from "@slices/commentSlice/comment";
 import {
   RepositoryRequest,
   RequestApprovalState,
@@ -264,13 +263,8 @@ export default function RequestHistoryTable({
               ).unwrap();
             } else {
               await dispatch(
-                addComments({
-                  requestId: requestId,
-                  authorEmail: leadEmailProp || adminEmailProp || "",
-                  commentText: `[REJECTED]-${comment}`,
-                }),
+                rejectRepositoryRequest({ id: requestId, commentText: comment.trim() }),
               ).unwrap();
-              await dispatch(rejectRepositoryRequest(requestId)).unwrap();
             }
             refetch();
           } catch {

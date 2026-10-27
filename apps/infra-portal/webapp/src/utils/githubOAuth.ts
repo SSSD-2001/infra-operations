@@ -15,7 +15,6 @@
 // under the License.
 import { GithubOAuthConfig } from "@config/config";
 import type { NavigateFunction } from "react-router-dom";
-
 import { GITHUB_OAUTH_STATE_KEY, RESULT_KEY, PENDING_OAUTH_CODE_KEY } from "@config/constant";
 
 export const stashPendingOAuthCode = (code: string): void => {

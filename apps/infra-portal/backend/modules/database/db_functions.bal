@@ -22,7 +22,10 @@ import infra_portal.types;
 # + id - Repository request id
 # + return - RepositoryRequest or error
 public isolated function getRepositoryRequest(int id) returns RepositoryRequest|error? {
-    RepositoryRequest result = check databaseClient->queryRow(getRepositoryRequestQuery(id));
+    RepositoryRequest|error result = databaseClient->queryRow(getRepositoryRequestQuery(id));
+    if result is sql:NoRowsError {
+        return ();
+    }
     return result;
 }
 
@@ -33,7 +36,7 @@ public isolated function getRepositoryRequest(int id) returns RepositoryRequest|
 public isolated function getRepositoryRequests(RepositoryRequestFilter filter) returns RepositoryRequest[]|error {
 
     stream<RepositoryRequest, error?> resultStream = databaseClient->query(getRepositoryRequestsQuery(filter.memberEmail,
-        filter.leadEmail, filter.'limit, filter.offset, filter.repoName, filter.approvalState));
+        filter.leadEmail, filter.'limit, filter.offset, filter.repoName, filter.approvalState, filter.callerEmail));
 
     return from RepositoryRequest repositoryRequest in resultStream
         select repositoryRequest;
@@ -224,14 +227,6 @@ public isolated function getOrganizationById(int organizationId) returns Organiz
     return databaseClient->queryRow(getOrganizationByIdQuery(organizationId));
 }
 
-# Get a specific organization by name.
-#
-# + organizationName - Organization name
-# + return - Organization or error
-public isolated function getOrganizationByName(string organizationName) returns Organization|error {
-    return databaseClient->queryRow(getOrganizationByNameQuery(organizationName));
-}
-
 # Upsert an organization. If the organization does not exist, it creates a new one.
 # If it exists, it updates the organization to active.
 # Sets the visibility to 'Public' if the organization plan is 'free'.
@@ -287,62 +282,12 @@ public isolated function deleteOrganization(int organizationId) returns InvalidO
     if pendingRequestIds == [] {
         _ = check databaseClient->execute(deleteOrganizationQuery(organizationId));
         _ = check databaseClient->execute(deleteOrganizationDefaultTeamQuery(organizationId));
-        _ = check deactivateRepoTeamLeadsByOrganization(organizationId);
         return;
     }
     string customError = string `Delete Organization Failed: Requests with IDs ${
         formatToCommaSeparatedString(pendingRequestIds)} are still pending.`;
 
     return error InvalidOperationError(customError);
-}
-
-# Deactivate repo team leads for inactive organizations.
-#
-# + return - Number of deactivated repo team leads or error
-public isolated function deactivateRepoTeamLeadsForInactiveOrgs() returns int|error {
-    sql:ExecutionResult result = check databaseClient->execute(
-        deactivateRepoTeamLeadsForInactiveOrgsQuery()
-    );
-    int count = result.affectedRowCount ?: 0;
-    return count;
-}
-
-# Deactivate all repo team leads for an organization.
-#
-# + organizationId - Organization id
-# + return - Number of deactivated rows or error
-public isolated function deactivateRepoTeamLeadsByOrganization(int organizationId) returns int|error {
-    sql:ExecutionResult result = check databaseClient->execute(
-        deactivateRepoTeamLeadsByOrganizationQuery(organizationId)
-    );
-    return result.affectedRowCount ?: 0;
-}
-
-# Deactivate a repo team lead.
-#
-# + organizationId - Organization id
-# + teamSlug - Team slug
-# + return - Number of deactivated repo team leads or error
-public isolated function deactivateRepoTeamLead(int organizationId, string teamSlug) returns int|error {
-    sql:ExecutionResult result = check databaseClient->execute(
-        deactivateRepoTeamLeadQuery(organizationId, teamSlug));
-    return result.affectedRowCount ?: 0;
-}
-
-# Check if a repo team lead exists.
-#
-# + organizationId - Organization id
-# + leadEmail - Lead email
-# + return - Boolean or error
-public isolated function isRepoTeamLead(int organizationId, string leadEmail) returns boolean|error {
-    int|error id = databaseClient->queryRow(isRepoTeamLeadQuery(organizationId, leadEmail));
-    if id is sql:NoRowsError {
-        return false;
-    }
-    if id is error {
-        return id;
-    }
-    return true;
 }
 
 # Get all default teams for a given organization.
@@ -448,9 +393,7 @@ isolated function getPendingRequestsByLeadId(int leadId) returns int[]|error {
 # + return - Array of execution results or error
 isolated function batchExecuteAddOrganizationDefaultTeams(int organizationId, int[] teamIds)
     returns sql:ExecutionResult[]|error {
-    if teamIds.length() == 0 {
-        return [];
-    }
+        
     sql:ParameterizedQuery[] batch = from int teamId in teamIds
         select addOrganizationDefaultTeamQuery(organizationId, teamId);
     return databaseClient->batchExecute(batch);
@@ -491,6 +434,14 @@ public isolated function getOrganizationDefaultRepositories(types:EmploymentType
         databaseClient->query(getOrganizationDefaultRepositoriesQuery(employmentType, department));
     return from OrganizationDefaultRepository row in resultStream
         select row;
+}
+
+# Get a specific organization by name.
+#
+# + organizationName - Organization name
+# + return - Organization or error
+public isolated function getOrganizationByName(string organizationName) returns Organization|error {
+    return databaseClient->queryRow(getOrganizationByNameQuery(organizationName));
 }
 
 # Get an access request by id.

@@ -66,9 +66,10 @@ isolated function getRepositoryRequestQuery(int id) returns sql:ParameterizedQue
 # + offset - Offset for the number of records to be returned
 # + repoName - Repository name
 # + approvalState - Approval state of the repository request
+# + callerEmail - Signed-in caller. When set, results are limited to that person's requests and assigned leads
 # + return - Repository requests created by the user or sql:Error
 isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEmail, int? 'limit, int? offset,
-        string? repoName, RepositoryRequestState? approvalState) returns sql:ParameterizedQuery {
+        string? repoName, RepositoryRequestState? approvalState, string? callerEmail) returns sql:ParameterizedQuery {
 
     sql:ParameterizedQuery mainQuery = `
         SELECT 
@@ -108,8 +109,8 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
         LEFT JOIN 
             github_organizations go ON rr.organization_id = go.organization_id
         WHERE 
-            (rr.email = ${memberEmail} OR ${memberEmail} IS NULL) AND 
-            (rr.lead_email = ${leadEmail} OR ${leadEmail} IS NULL)
+            (LOWER(rr.email) = LOWER(${memberEmail}) OR ${memberEmail} IS NULL) AND
+            (LOWER(rr.lead_email) = LOWER(${leadEmail}) OR ${leadEmail} IS NULL)
     `;
 
     if repoName is string {
@@ -118,6 +119,11 @@ isolated function getRepositoryRequestsQuery(string? memberEmail, string? leadEm
 
     if approvalState is RepositoryRequestState {
         mainQuery = sql:queryConcat(mainQuery, ` AND state = ${approvalState}`);
+    }
+
+    if callerEmail is string {
+        mainQuery = sql:queryConcat(mainQuery,
+        ` AND (LOWER(rr.email) = LOWER(${callerEmail}) OR LOWER(rr.lead_email) = LOWER(${callerEmail}))`);
     }
 
     mainQuery = sql:queryConcat(mainQuery, ` ORDER BY timestamp DESC`);
@@ -514,25 +520,17 @@ isolated function getOrganizationsQuery() returns sql:ParameterizedQuery => `
 # + return - Query to get an organization by name
 isolated function getOrganizationByNameQuery(string organizationName) returns sql:ParameterizedQuery => `
     SELECT 
-        o.organization_id AS organizationId,
-        o.organization_name AS organizationName,
-        o.visibility AS organizationVisibility,
-        o.plan AS organizationPlan,
-        o.enable_issues AS enableIssues,
-        o.active AS active,
-        GROUP_CONCAT(dt.team_name) AS defaultTeams,
-        GROUP_CONCAT(dt.team_id) AS teamIds
+        organization_id AS organizationId,
+        organization_name AS organizationName,
+        visibility AS organizationVisibility,
+        plan AS organizationPlan,
+        enable_issues AS enableIssues,
+        active AS active
     FROM 
-        github_organizations o
-    LEFT JOIN 
-        organization_default_teams odt ON o.organization_id = odt.organization_id
-    LEFT JOIN 
-        default_teams dt ON odt.team_id = dt.team_id
+        github_organizations
     WHERE 
-        o.organization_name = ${organizationName}
-    GROUP BY 
-        o.organization_id, o.organization_name, o.visibility, o.plan, o.enable_issues, o.active
-`;
+        organization_name = ${organizationName}
+    `;
 
 # Query to get an organization by id.
 #
@@ -555,6 +553,12 @@ isolated function getOrganizationByIdQuery(int organizationId) returns sql:Param
         default_teams dt ON odt.team_id = dt.team_id
     WHERE
         o.organization_id = ${organizationId}
+    GROUP BY
+        o.organization_id,
+        o.organization_name,
+        o.visibility,
+        o.plan,
+        o.enable_issues
     `;
 
 # Query to add a new organization.
@@ -796,11 +800,11 @@ isolated function getUserDefaultRepositoryAccessQuery(string employeeId)
 `;
 
 # Get default org/team rows for an employment type.
-# A null department on the row applies to every department.
+# An empty department on the row applies to every department.
 # A set department applies only when it matches the employee.
 #
 # + employmentType - Employment type filter
-# + department - Employee department; null matches only the default rows
+# + department - Employee department; null or empty matches only the default rows
 # + return - Parameterized select query
 isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType employmentType, string? department)
     returns sql:ParameterizedQuery => `
@@ -811,7 +815,7 @@ isolated function getOrganizationDefaultRepositoriesQuery(types:EmploymentType e
         department
     FROM organizations_default_repositories
     WHERE employment_type = ${employmentType}
-        AND (department IS NULL OR department = ${department})
+        AND (department IS NULL OR department = '' OR department = ${department})
 `;
 
 # Get an access request by id.

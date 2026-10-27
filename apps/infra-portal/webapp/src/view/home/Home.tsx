@@ -17,13 +17,16 @@ import CloudIcon from "@mui/icons-material/Cloud";
 import LanguageIcon from "@mui/icons-material/Language";
 import { Box, Grid, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import { BookMarked, BookKey, ClipboardList, Eye, GitPullRequest, Workflow } from "lucide-react";
+import { BookMarked, ClipboardList, Eye, GitPullRequest, Workflow } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 import { useEffect } from "react";
+
 import { Role } from "@root/src/slices/authSlice/auth";
+import { fetchDefaultRepositoryAccess } from "@root/src/slices/githubOauthAppSlice/githubOauth";
 import { fetchRepositoryRequests } from "@root/src/slices/repositoryRequestSlice/repositoryRequest";
 import { RootState, useAppDispatch, useAppSelector } from "@root/src/slices/store";
-import { fetchDefaultRepositoryAccess } from "@root/src/slices/githubOauthAppSlice/githubOauth";
+
 import SectionLabel from "../../component/ui/SectionLabel";
 import Greeting from "./Greeting/Greeting";
 import InfraServices from "./InfraServices/InfraServices";
@@ -41,20 +44,20 @@ export default function Home() {
   const auth = useAppSelector((state: RootState) => state.auth);
   const user = useAppSelector((state: RootState) => state.user);
   const repositoryRequestState = useAppSelector((state: RootState) => state.repositoryRequest);
-  const defaultAccessStatus = useAppSelector(
-    (state: RootState) => state.githubConnect.defaultAccessStatus,
-  );
+  const defaultAccessStatus = useAppSelector((state: RootState) => state.githubConnect.defaultAccessStatus);
 
   useEffect(() => {
-    dispatch(fetchDefaultRepositoryAccess());
     dispatch(fetchRepositoryRequests({ leadEmail: user.userInfo?.workEmail }));
-  },[dispatch, user.userInfo?.workEmail]);
+    dispatch(fetchDefaultRepositoryAccess());
+  }, [dispatch, user.userInfo?.workEmail]);
 
   const roles = auth.roles;
 
   const canReview = roles.includes(Role.ADMIN) || roles.includes(Role.APPROVER);
 
   const allRequests = repositoryRequestState.repositoryRequests.repositoryRequests;
+
+  // Theme-derived color aliases used for inline sections (greeting, alert, quick actions)
   const accent = theme.palette.primary.main;
   const accentBg = alpha(accent, 0.1);
   const greenColor = theme.palette.success.main;
@@ -66,11 +69,20 @@ export default function Home() {
 
   const quickActions = [
     {
-      icon: <BookKey size={16} />,
+      icon: <BookMarked size={16} />,
+      iconBg: accentBg,
+      iconColor: accent,
+      label: "New repository request",
+      subtitle: "Request a new GitHub repo",
+      onClick: () => navigate("/github/repository-requests"),
+      show: roles.includes(Role.EMPLOYEE) || roles.includes(Role.ADMIN),
+    },
+    {
+      icon: <GitPullRequest size={16} />,
       iconBg: blueBg,
       iconColor: blueColor,
-      label: "Repository Access",
-      subtitle: "Default access and existing repositories",
+      label: "Request repo access",
+      subtitle: "Get access to an existing repo",
       onClick: () => navigate("/github/repository-access-requests"),
       show: roles.includes(Role.EMPLOYEE) || roles.includes(Role.ADMIN),
     },
@@ -78,37 +90,28 @@ export default function Home() {
       icon: <GitPullRequest size={16} />,
       iconBg: blueBg,
       iconColor: blueColor,
-      label: "Request Access",
-      subtitle: "Ask for access to an existing repo",
+      label: "Request existing repo",
+      subtitle: "Ask a lead for repository access",
       onClick: () => navigate("/github/request-existing-repo-access"),
       show:
         (roles.includes(Role.EMPLOYEE) || roles.includes(Role.ADMIN)) &&
         defaultAccessStatus === "granted",
     },
     {
-      icon: <BookMarked size={16} />,
-      iconBg: accentBg,
-      iconColor: accent,
-      label: "New Repository",
-      subtitle: "Request a new GitHub repo",
-      onClick: () => navigate("/github/repository-requests"),
-      show: roles.includes(Role.EMPLOYEE) || roles.includes(Role.ADMIN),
-    },
-    {
       icon: <ClipboardList size={16} />,
       iconBg: greenBg,
       iconColor: greenColor,
-      label: "My Requests",
-      subtitle: "Track creation and access requests",
-      onClick: () => navigate("/github/my-requests"), 
+      label: "View my requests",
+      subtitle: "Track status and history",
+      onClick: () => navigate("/github/my-requests"),
       show: roles.includes(Role.EMPLOYEE) || roles.includes(Role.ADMIN),
     },
     {
       icon: <Eye size={16} />,
       iconBg: amberBg,
       iconColor: amberColor,
-      label: "Review Requests",
-      subtitle: "Approve or reject pending requests",
+      label: "Review requests",
+      subtitle: "Review pending submissions",
       onClick: () => navigate("/github/review-repository-requests"),
       show: canReview,
     },

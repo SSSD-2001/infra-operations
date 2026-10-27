@@ -19,9 +19,13 @@ import ballerinax/mysql.driver as _;
 
 # Database Client Configuration.
 configurable DatabaseConfig databaseConfig = ?;
+configurable DatabaseConnectionPoolConfig connectionPoolConfig = ?;
 
 DatabaseClientConfig databaseClientConfig = {
     ...databaseConfig,
+    connectionPool: {
+        ...connectionPoolConfig
+    },
     options: {
         ssl: {
             mode: mysql:SSL_REQUIRED

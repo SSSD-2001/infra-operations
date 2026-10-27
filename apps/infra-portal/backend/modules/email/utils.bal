@@ -92,13 +92,25 @@ public isolated function updateChanges(RepositoryRequest oldData, RepositoryRequ
         approvedCount: approvedCount.toString(),  
         rejectedCount: rejectedCount.toString(),  
         updatedAt: updatedAt ?: ""  
-    };  
+    };
+    foreach var [key, value] in emailData.clone().entries() {
+        emailData[key] = escapeHtml(value.toString());
+    }
     foreach var [key, newValue] in newData.entries(){
         var oldValue = oldData[key];
         if oldValue != newValue {
-            emailData[key] 
-                = string `<span style="background-color: #ffff99; font-weight: bold">${newValue.toString()}</span>`;
+            emailData[key]
+                = string `<span style="background-color: #ffff99; font-weight: bold">${escapeHtml(newValue.toString())}</span>`;
         }
     }
     return emailData;
+}
+
+isolated function escapeHtml(string value) returns string {
+    string escaped = re `&`.replaceAll(value, "&amp;");
+    escaped = re `<`.replaceAll(escaped, "&lt;");
+    escaped = re `>`.replaceAll(escaped, "&gt;");
+    escaped = re `"`.replaceAll(escaped, "&quot;");
+    escaped = re `'`.replaceAll(escaped, "&#39;");
+    return escaped;
 }

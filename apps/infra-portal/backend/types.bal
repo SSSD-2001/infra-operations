@@ -32,6 +32,12 @@ type VerifyEmailPayload record {
     string code;
 };
 
+# Comment required when rejecting a creation request.
+public type RejectRequest record {|
+    # Reason for the rejection
+    string commentText;
+|};
+
 # Represents the response structure for retrieving user information.
 public type UserInfoResponse record {|
     # Id of the employee

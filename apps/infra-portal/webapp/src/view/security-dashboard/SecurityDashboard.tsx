@@ -49,7 +49,7 @@ export default function SecurityDashboard() {
       features: [
         {
           label: "View detailed report",
-          onClick: () => window.open(securityDashboardLinks.deviceComplianceLink, "_blank"),
+          onClick: () => window.open(securityDashboardLinks.deviceComplianceLink, "_blank", "noopener,noreferrer"),
           tag: {
             tagName: "report",
             tagBackground: blueBg,
@@ -74,7 +74,7 @@ export default function SecurityDashboard() {
       features: [
         {
           label: "View detailed report",
-          onClick: () => window.open(securityDashboardLinks.softwareComplianceLink, "_blank"),
+          onClick: () => window.open(securityDashboardLinks.softwareComplianceLink, "_blank", "noopener,noreferrer"),
           tag: {
             tagName: "report",
             tagBackground: greenBg,
@@ -99,7 +99,7 @@ export default function SecurityDashboard() {
       features: [
         {
           label: "View detailed report",
-          onClick: () => window.open(securityDashboardLinks.securityScoreLink, "_blank"),
+          onClick: () => window.open(securityDashboardLinks.securityScoreLink, "_blank", "noopener,noreferrer"),
           tag: {
             tagName: "report",
             tagBackground: amberBg,

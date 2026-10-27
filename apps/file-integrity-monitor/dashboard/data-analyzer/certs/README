@@ -1,0 +1,4 @@
+add your generated ca certificate files here to enabling the tls communication between the db.
+* ca.pem
+* client-cert.pem
+* client-key.pem

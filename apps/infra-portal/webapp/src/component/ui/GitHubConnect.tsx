@@ -114,7 +114,9 @@ export default function GitHubConnect() {
     }
 
     stashPendingOAuthCode(code);
-    sessionStorage.removeItem(OAUTH_CALLBACK_STATE_KEY);
+    if (!sessionStorage.getItem(OAUTH_CALLBACK_STATE_KEY)) {
+      sessionStorage.setItem(OAUTH_CALLBACK_STATE_KEY, urlState);
+    }
     navigate(returnPath, { replace: true });
   }, [navigate]);
 

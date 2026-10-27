@@ -1,0 +1,90 @@
+openapi: 3.0.1
+info:
+  title: Asgardeo User Check API
+  version: 1.0.0
+servers:
+  - url: "{server}:{port}/"
+    variables:
+      server:
+        default: http://localhost
+      port:
+        default: "8080"
+paths:
+  /health:
+    get:
+      summary: Health check endpoint.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Ok
+
+  /organizations/external/users/validate:
+    post:
+      summary: Check whether a user exists in the external Asgardeo organization, and its lock state.
+      operationId: postExternalUsersValidate
+      requestBody:
+        description: Lookup payload
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExistsRequest'
+        required: true
+      responses:
+        "200":
+          description: Ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExistsResponse'
+        "400":
+          description: BadRequest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorPayload'
+        "413":
+          description: PayloadTooLarge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorPayload'
+        "500":
+          description: InternalServerError
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorPayload'
+        "503":
+          description: ServiceUnavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorPayload'
+
+components:
+  schemas:
+    ExistsRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+    ExistsResponse:
+      type: object
+      required:
+        - exists
+        - locked
+      properties:
+        exists:
+          type: boolean
+        locked:
+          type: boolean
+          nullable: true
+          description: Account-locked state. Always present; null when `exists` is false, or if Asgardeo did not return a determinate lock state.
+    ErrorPayload:
+      type: object
+      properties:
+        message:
+          type: string

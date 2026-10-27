@@ -47,7 +47,6 @@ export default function QuickActionCard({
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: "14px",
         p: 2,
-        height: "80%",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",

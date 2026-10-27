@@ -18,9 +18,19 @@ import ballerina/sql;
 import ballerinax/mysql;
 import infra_portal.types;
 
+# Database connection pool settings exposed as configurables.
+type DatabaseConnectionPoolConfig record {|
+    # Maximum number of open connections
+    int maxOpenConnections;
+    # Minimum number of idle connections
+    int minIdleConnections;
+    # Maximum lifetime of a connection, in seconds
+    decimal maxConnectionLifeTime;
+|};
+
 # [Configurable] database configs.
 type DatabaseConfig record {|
-    # Database User 
+    # Database User
     string user;
     # Database Password
     string password;
@@ -30,13 +40,13 @@ type DatabaseConfig record {|
     string host;
     # Database port
     int port;
-    # Database connection pool
-    sql:ConnectionPool connectionPool;
 |};
 
 # Database config record.
 type DatabaseClientConfig record {|
     *DatabaseConfig;
+    # Database connection pool
+    sql:ConnectionPool connectionPool;
     # Additional configurations related to the MySQL database connection
     mysql:Options? options;
 |};
@@ -219,6 +229,8 @@ public type RepositoryRequestFilter record {|
     int? 'limit = ();
     # Starting point for pagination
     int? offset = ();
+    # Signed-in caller. When set, the list is limited to that person's own requests and assigned leads.
+    string? callerEmail = ();
 |};
 
 # Record to represent an organization.
@@ -343,7 +355,7 @@ public type OrganizationDefaultRepository record {|
     # Employment type this row applies to
     @sql:Column {name: "employment_type"}
     string employmentType;
-    # Department this row applies to; null means every department of that employment type
+    # Department this row applies to; empty string means every department of that employment type
     @sql:Column {name: "department"}
     string? department;
 |};
