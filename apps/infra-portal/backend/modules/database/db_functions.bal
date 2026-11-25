@@ -567,6 +567,28 @@ public isolated function fillRepoTeamLeadEmail(
     return result.affectedRowCount ?: 0;
 }
 
+# Deactivate repo team leads for inactive organizations.
+#
+# + return - Number of updated rows or error
+public isolated function deactivateRepoTeamLeadsForInactiveOrgs() returns int|error {
+    sql:ExecutionResult result = check databaseClient->execute(
+        deactivateRepoTeamLeadsForInactiveOrgsQuery()
+    );
+    return result.affectedRowCount ?: 0;
+}
+
+# Deactivate a repo team lead.
+#
+# + organizationId - Organization id
+# + teamSlug - Team slug
+# + return - Number of updated rows or error
+public isolated function deactivateRepoTeamLead(int organizationId, string teamSlug) returns int|error {
+    sql:ExecutionResult result = check databaseClient->execute(
+        deactivateRepoTeamLeadQuery(organizationId, teamSlug)
+    );
+    return result.affectedRowCount ?: 0;
+}
+
 # Get all repo team leads.
 #
 # + return - Rows or error

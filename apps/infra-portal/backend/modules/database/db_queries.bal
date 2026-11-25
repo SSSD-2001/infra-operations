@@ -989,18 +989,6 @@ isolated function deactivateRepoTeamLeadsForInactiveOrgsQuery() returns sql:Para
     WHERE rtl.active = TRUE AND o.active = FALSE
 `;
 
-# Deactivate repo team leads for an organization.
-#
-# + organizationId - Organization id
-# + return - Error or null if successful
-isolated function deactivateRepoTeamLeadsByOrganizationQuery(int organizationId)
-    returns sql:ParameterizedQuery => `
-    UPDATE repo_team_leads
-    SET active = FALSE
-    WHERE organization_id = ${organizationId}
-      AND active = TRUE
-`;
-
 # Deactivate a repo team lead.
 #
 # + organizationId - Organization id
@@ -1013,21 +1001,6 @@ isolated function deactivateRepoTeamLeadQuery(int organizationId, string teamSlu
     WHERE organization_id = ${organizationId}
       AND team_slug = ${teamSlug}
       AND active = TRUE
-`;
-
-# Check if a repo team lead exists.
-#
-# + organizationId - Organization id
-# + leadEmail - Lead email
-# + return - Error or null if successful
-isolated function isRepoTeamLeadQuery(int organizationId, string leadEmail)
-    returns sql:ParameterizedQuery => `
-    SELECT id
-    FROM repo_team_leads
-    WHERE organization_id = ${organizationId}
-      AND lead_email = ${leadEmail}
-      AND active = TRUE
-    LIMIT 1
 `;
 
 # Revert an access request to pending.

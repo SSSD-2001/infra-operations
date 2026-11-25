@@ -491,43 +491,6 @@ public isolated function getTeamMaintainers(string orgName, string teamSlug) ret
     );
 }
 
-# Map a GitHub maintainer to a WSO2 work email.
-#
-# + member - GitHub team member
-# + employeeEmails - Lowercased HR work emails
-# + loginEmailCache - Cache of login -> resolved email
-# + return - WSO2 email or ()
-public isolated function resolveMaintainerWorkEmail(
-    TeamMember member,
-    map<boolean> employeeEmails,
-    map<string?> loginEmailCache
-) returns string? {
-    string loginKey = member.login.toLowerAscii();
-    if loginEmailCache.hasKey(loginKey) {
-        return loginEmailCache[loginKey];
-    }
-
-    string? resolved = ();
-    string? memberEmail = member?.email;
-    if memberEmail is string && isKnownWso2Employee(memberEmail, employeeEmails) {
-        resolved = memberEmail.toLowerAscii();
-    }
-
-    if resolved is () {
-        string guessed = string `${loginKey}@wso2.com`;
-        if employeeEmails.hasKey(guessed) {
-            resolved = guessed;
-        }
-    }
-
-    loginEmailCache[loginKey] = resolved;
-    return resolved;
-}
-
-isolated function isKnownWso2Employee(string email, map<boolean> employeeEmails) returns boolean {
-    return email.toLowerAscii().endsWith("@wso2.com");
-}
-
 # API Call to add or update team membership for multiple users.
 #
 # + inputs - List of input objects containing organization name, team slug, user name, and role

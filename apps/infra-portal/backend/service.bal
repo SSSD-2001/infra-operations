@@ -124,6 +124,14 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         string? githubUserId = userInfo.githubUserId;
+        if githubUserId is () || githubUserId == "" {
+            string?|error linkedId = scim:getLinkedGithubUserId(userInfo.email);
+            if linkedId is string {
+                githubUserId = linkedId;
+            } else if linkedId is error {
+                log:printWarn("Could not read GitHub user id from the IdP", linkedId, email = userInfo.email);
+            }
+        }
         string? githubUsername = ();
         if githubUserId is string {
             gh:GitHubUser|error githubUser = gh:getUserDetails(githubUserId);
@@ -1689,117 +1697,7 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
         }
 
-        db:Organization[]|error organizations = db:getOrganizations();
-        if organizations is error {
-            return <http:InternalServerError>{body: {message: "Error while fetching organizations!"}};
-        }
-
-        db:RepoTeamLeadKey[]|error existingKeys = db:getRepoTeamLeadKeys();
-        if existingKeys is error {
-            return <http:InternalServerError>{body: {message: "Error while fetching existing team leads!"}};
-        }
-
-        map<boolean> existing = {};
-        foreach var key in existingKeys {
-            existing[string `${key.organizationId}|${key.teamSlug}`] = true;
-        }
-
-        map<string?> existingEmails = {};
-        foreach var key in existingKeys {
-            existingEmails[string `${key.organizationId}|${key.teamSlug}`] = key.leadEmail;
-        }
-
-        int|error deactivated = db:deactivateRepoTeamLeadsForInactiveOrgs();
-        if deactivated is error {
-            return <http:InternalServerError>{body: {message: "Error while removing stale repo team leads!"}};
-        }
-        int deletedCount = deactivated;
-
-        map<string?> githubIdEmailCache = {};
-        int addedCount = 0;
-        int updatedCount = 0;
-        foreach db:Organization org in organizations {
-            gh:GitHubTeam[]|error teams = gh:getAllTeamsForOrganization(org.organizationName);
-            if teams is error {
-                log:printError("Error fetching GitHub teams", teams, organizationName = org.organizationName);
-                continue;
-            }
-            map<boolean> fetchedSlugs = {};
-            foreach gh:GitHubTeam team in teams {
-                fetchedSlugs[team.slug] = true;
-                string mapKey = string `${org.organizationId}|${team.slug}`;
-                boolean isNew = !existing.hasKey(mapKey);
-                string? currentEmail = existingEmails[mapKey];
-                boolean needsLead = isNew
-                    || currentEmail is ()
-                    || currentEmail == ""
-                    || currentEmail == gh:DEFAULT_REPO_TEAM_LEAD_EMAIL;
-                if !needsLead {
-                    continue;
-                }
-
-                string? resolvedEmail = ();
-                gh:TeamMember[]|error maintainers = gh:getTeamMaintainers(org.organizationName, team.slug);
-                if maintainers is error {
-                    log:printWarn("Error fetching team maintainers", maintainers,
-                        organizationName = org.organizationName, teamSlug = team.slug);
-                } else {
-                    foreach gh:TeamMember maintainer in maintainers {
-                            string idKey = maintainer.id.toString();
-                            if githubIdEmailCache.hasKey(idKey) {
-                                resolvedEmail = githubIdEmailCache[idKey];
-                            } else {
-                                string?|error mapped = scim:searchWorkEmailByGithubUserId(idKey);
-                                if mapped is error {
-                                    log:printWarn("Asgardeo GitHub user id lookup failed", mapped,
-                                        githubUserId = idKey, githubLogin = maintainer.login);
-                                    githubIdEmailCache[idKey] = ();
-                                } else {
-                                    githubIdEmailCache[idKey] = mapped;
-                                    resolvedEmail = mapped;
-                                }
-                            }
-                        if resolvedEmail is string {
-                            break;
-                        }
-                    }
-                }
-
-                string leadEmail = resolvedEmail is string
-                    ? resolvedEmail
-                    : gh:DEFAULT_REPO_TEAM_LEAD_EMAIL;
-
-                if isNew {
-                    error? inserted = db:insertRepoTeamLead(org.organizationId, team.name, team.slug, leadEmail);
-                    if inserted is error {
-                        return <http:InternalServerError>{body: {message: "Error while inserting repo team lead!"}};
-                    }
-                    addedCount += 1;
-                } else {
-                    int|error filled = db:fillRepoTeamLeadEmail(
-                        org.organizationId, team.slug, currentEmail, leadEmail
-                    );
-                    if filled is error {
-                        return <http:InternalServerError>{body: {message: "Error while updating repo team lead!"}};
-                    }
-                    updatedCount += filled;
-                }
-            }
-            foreach var key in existingKeys {
-                if key.organizationId != org.organizationId {
-                    continue;
-                }
-                if fetchedSlugs.hasKey(key.teamSlug) {
-                    continue;
-                }
-                int|error removed = db:deactivateRepoTeamLead(key.organizationId, key.teamSlug);
-                if removed is error {
-                    return <http:InternalServerError>{body: {message: "Error while removing stale repo team leads!"}};
-                }
-                deletedCount += removed;
-            }
-        }
-        return {addedCount, deletedCount, updatedCount};
+        return syncRepoTeamLeads();
     }
 
     # Update a repo team lead email.
@@ -2270,6 +2168,16 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         string? githubUserId = userInfo.githubUserId;
+        if githubUserId is () || githubUserId == "" {
+            string?|error linkedId = scim:getLinkedGithubUserId(userInfo.email);
+            if linkedId is error {
+                log:printError("Could not read GitHub user id from the IdP", linkedId, email = userInfo.email);
+                return <http:InternalServerError>{
+                    body: {message: "Error while reading the linked GitHub account."}
+                };
+            }
+            githubUserId = linkedId;
+        }
         if githubUserId is () {
             return <http:Forbidden>{
                 body: {message: "GitHub account is not verified."}
@@ -2379,7 +2287,7 @@ service http:InterceptableService / on new http:Listener(8090) {
         if leadEmail is string {
             boolean isAdmin = authorization:checkPermissions(
                 [authorization:authorizedRoles.admin], userInfo.groups);
-            if leadEmail != userInfo.email && !isAdmin {
+            if !userInfo.email.equalsIgnoreCaseAscii(leadEmail) && !isAdmin {
                 return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
             }
             requests = db:getAccessRequestsByLeadEmail(leadEmail);
@@ -2418,7 +2326,7 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         boolean isAdmin = authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups);
-        if request.leadEmail != userInfo.email && !isAdmin {
+        if !userInfo.email.equalsIgnoreCaseAscii(request.leadEmail) && !isAdmin {
             return <http:Forbidden>{body: {message: "Only the assigned lead can approve this request!"}};
         }
 
@@ -2445,7 +2353,8 @@ service http:InterceptableService / on new http:Listener(8090) {
     # + id - Access request id
     # + payload - Reject request payload
     # + return - OK or Forbidden / BadRequest / NotFound / InternalServerError
-    resource function patch repository\-access\-requests/[int id]/reject(http:RequestContext ctx, record {| string comment; |} payload)
+    resource function patch repository\-access\-requests/[int id]/reject(
+            http:RequestContext ctx, AccessRequestRejectPayload payload)
         returns http:Ok|http:Forbidden|http:BadRequest|http:NotFound|http:InternalServerError {
 
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
@@ -2471,7 +2380,7 @@ service http:InterceptableService / on new http:Listener(8090) {
 
         boolean isAdmin = authorization:checkPermissions(
             [authorization:authorizedRoles.admin], userInfo.groups);
-        if request.leadEmail != userInfo.email && !isAdmin {
+        if !userInfo.email.equalsIgnoreCaseAscii(request.leadEmail) && !isAdmin {
             return <http:Forbidden>{body: {message: "Only the assigned lead can reject this request!"}};
         }
 
@@ -2506,7 +2415,8 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
         boolean isAdmin = authorization:checkPermissions(
             [authorization:authorizedRoles.admin], userInfo.groups);
-        if request.email != userInfo.email && request.leadEmail != userInfo.email && !isAdmin {
+        if !userInfo.email.equalsIgnoreCaseAscii(request.email)
+            && !userInfo.email.equalsIgnoreCaseAscii(request.leadEmail) && !isAdmin {
             return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
         }
         return request;
@@ -2526,11 +2436,17 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
         }
 
-        if payload.permission != "pull" && payload.permission != "triage" && payload.permission != "push" {
-            return <http:BadRequest>{body: {message: "permission must be pull, triage, or push"}};
-        }
-
         string? githubUserId = userInfo.githubUserId;
+        if githubUserId is () || githubUserId == "" {
+            string?|error linkedId = scim:getLinkedGithubUserId(userInfo.email);
+            if linkedId is error {
+                log:printError("Could not read GitHub user id from the IdP", linkedId, email = userInfo.email);
+                return <http:InternalServerError>{
+                    body: {message: "Error while reading the linked GitHub account."}
+                };
+            }
+            githubUserId = linkedId;
+        }
         if githubUserId is () {
             return <http:BadRequest>{body: {message: "GitHub account is not verified."}};
         }
@@ -2639,6 +2555,32 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         return <http:Created>{body: inserted};
+    }
+
+    # GitHub OAuth client ID for the Connect button. The client secret is not returned.
+    #
+    # + ctx - Request object
+    # + return - The public client ID, or an error when the caller or the setting is missing
+    isolated resource function get github/oauth\-config(http:RequestContext ctx)
+        returns gh:GitHubOAuthPublicConfig|http:Forbidden|http:NotFound|http:InternalServerError {
+        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
+        if userInfo is error {
+            return <http:InternalServerError>{
+                body: {message: "User information header not found!"}
+            };
+        }
+        if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
+            return <http:Forbidden>{
+                body: {message: "Insufficient privileges!"}
+            };
+        }
+        gh:GitHubOAuthPublicConfig|error config = gh:githubOAuthPublicConfig();
+        if config is error {
+            return <http:NotFound>{
+                body: {message: "GitHub OAuth is not configured."}
+            };
+        }
+        return config;
     }
 
     # Exchange the authorization code for an access token.

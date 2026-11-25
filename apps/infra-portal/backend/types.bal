@@ -180,6 +180,13 @@ public type DefaultRepositoryAccessResponse record {|
     DefaultAccessOrganization[] organizations;
 |};
 
+# Permission requested on an existing repository.
+public enum RepositoryPermission {
+    PULL = "pull",
+    TRIAGE = "triage",
+    PUSH = "push"
+}
+
 # Body for POST /repository-access-requests.
 public type AccessRequestPayload record {|
     # Functional lead email
@@ -193,9 +200,15 @@ public type AccessRequestPayload record {|
     # Existing repository name
     string repoName;
     # pull, triage, or push
-    string permission;
+    RepositoryPermission permission;
     # Why access is needed
     string justification;
+|};
+
+# Body for PATCH /repository-access-requests/{id}/reject.
+public type AccessRequestRejectPayload record {|
+    # Reason for the rejection
+    string comment;
 |};
 
 # Body for PUT /repo-team-leads/{id}.
