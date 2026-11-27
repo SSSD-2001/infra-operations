@@ -137,7 +137,7 @@ export default function RequestHistoryTable({
     } else if (leadEmailProp) {
       void dispatch(fetchAccessRequests({ leadEmail: leadEmailProp }));
     } else if (adminEmailProp) {
-      void dispatch(fetchAccessRequests());
+      void dispatch(fetchAccessRequests({ all: true }));
     }
   }, [dispatch, leadEmailProp, memberEmailProp, adminEmailProp]);
   

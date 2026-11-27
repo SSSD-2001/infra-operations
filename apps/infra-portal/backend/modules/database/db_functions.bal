@@ -466,6 +466,15 @@ public isolated function getAccessRequestsByEmail(string email) returns AccessRe
         select row;
 }
 
+# List every access request.
+#
+# + return - Rows or error
+public isolated function getAllAccessRequests() returns AccessRequest[]|error {
+    stream<AccessRequest, error?> resultStream = databaseClient->query(getAllAccessRequestsQuery());
+    return from AccessRequest row in resultStream
+        select row;
+}
+
 # Get access requests by lead email.
 #
 # + leadEmail - Lead email
@@ -532,22 +541,6 @@ public isolated function insertRepoTeamLead(
     );
 }
 
-# Seed a repo team lead.
-#
-# + organizationId - Organization id
-# + teamName - Team name
-# + teamSlug - Team slug
-# + return - Error or null if successful
-public isolated function seedRepoTeamLead(
-    int organizationId,
-    string teamName,
-    string teamSlug
-) returns error? {
-    _ = check databaseClient->execute(
-        seedRepoTeamLeadQuery(organizationId, teamName, teamSlug)
-    );
-}
-
 # Fill lead_email only when it still matches the email observed at sync start.
 #
 # + organizationId - Organization id
@@ -594,6 +587,19 @@ public isolated function deactivateRepoTeamLead(int organizationId, string teamS
 # + return - Rows or error
 public isolated function getRepoTeamLeads() returns RepoTeamLead[]|error {
     stream<RepoTeamLead, error?> resultStream = databaseClient->query(getRepoTeamLeadsQuery());
+    return from RepoTeamLead row in resultStream
+        select row;
+}
+
+# Active repo team leads for an organization, optionally limited to one lead email.
+#
+# + organizationId - Organization id
+# + leadEmail - Lead email, or () for every lead in the organization
+# + return - Rows or error
+public isolated function getRepoTeamLeadsForAccess(int organizationId, string? leadEmail)
+    returns RepoTeamLead[]|error {
+    stream<RepoTeamLead, error?> resultStream =
+        databaseClient->query(getRepoTeamLeadsForAccessQuery(organizationId, leadEmail));
     return from RepoTeamLead row in resultStream
         select row;
 }

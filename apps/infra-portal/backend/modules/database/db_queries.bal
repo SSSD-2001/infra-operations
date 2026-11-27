@@ -869,6 +869,30 @@ isolated function getAccessRequestsByEmailQuery(string email) returns sql:Parame
     ORDER BY timestamp DESC
 `;
 
+# List every access request.
+#
+# + return - Select query
+isolated function getAllAccessRequestsQuery() returns sql:ParameterizedQuery => `
+    SELECT
+        id,
+        email,
+        github_username,
+        lead_email,
+        cc_list,
+        organization_id,
+        org_name,
+        repo_name,
+        permission,
+        justification,
+        state,
+        reviewer_email,
+        review_comment,
+        timestamp,
+        updated_at
+    FROM access_requests
+    ORDER BY timestamp DESC
+`;
+
 # Find a Pending access request for the same person and repo.
 #
 # + email - Requester email
@@ -947,6 +971,30 @@ isolated function getRepoTeamLeadsQuery() returns sql:ParameterizedQuery => `
     JOIN github_organizations o ON o.organization_id = rtl.organization_id
     WHERE rtl.active = true AND o.active = true
     ORDER BY o.organization_name, rtl.team_name;
+`;
+
+# Active repo team leads for one organization.
+# When leadEmail is set, only rows with that email are returned.
+#
+# + organizationId - Organization id
+# + leadEmail - Lead email, or () for every lead in the organization
+# + return - Select query
+isolated function getRepoTeamLeadsForAccessQuery(int organizationId, string? leadEmail)
+    returns sql:ParameterizedQuery => `
+    SELECT
+        rtl.id,
+        rtl.organization_id,
+        o.organization_name,
+        rtl.team_name,
+        rtl.team_slug,
+        rtl.lead_email
+    FROM repo_team_leads rtl
+    JOIN github_organizations o ON o.organization_id = rtl.organization_id
+    WHERE rtl.active = true
+      AND o.active = true
+      AND rtl.organization_id = ${organizationId}
+      AND (LOWER(rtl.lead_email) = LOWER(${leadEmail}) OR ${leadEmail} IS NULL)
+    ORDER BY rtl.team_name
 `;
 
 # Get all repo team lead keys.
@@ -1035,25 +1083,6 @@ isolated function insertRepoTeamLeadQuery(
         lead_email = IF(lead_email IS NULL, VALUES(lead_email), lead_email);
 `;
 
-# Seed a repo team lead with a null email (used when an org is added).
-#
-# + organizationId - Organization id
-# + teamName - Team name
-# + teamSlug - Team slug
-# + return - Error or null if successful
-isolated function seedRepoTeamLeadQuery(
-    int organizationId,
-    string teamName,
-    string teamSlug
-) returns sql:ParameterizedQuery => `
-    INSERT INTO repo_team_leads (organization_id, team_name, team_slug, lead_email, active)
-    VALUES (${organizationId}, ${teamName}, ${teamSlug}, NULL, TRUE)
-    ON DUPLICATE KEY UPDATE
-        team_name = VALUES(team_name),
-        active = TRUE,
-        lead_email = NULL;
-`;
-
 # Update a repo team lead email.
 #
 # + id - ID of the repo team lead
@@ -1077,7 +1106,7 @@ isolated function getAccessRequestsByLeadEmailQuery(string leadEmail) returns sq
         justification, state, reviewer_email, review_comment,
         timestamp, updated_at
     FROM access_requests
-    WHERE lead_email = ${leadEmail}
+    WHERE LOWER(lead_email) = LOWER(${leadEmail})
     ORDER BY timestamp DESC
 `;
 

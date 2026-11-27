@@ -83,6 +83,8 @@ export const AppConfig = {
     organizations: ServiceBaseUrl + "/organizations",
     comments: (requestId: number) => `${ServiceBaseUrl}/repository-requests/${requestId}/comments`,
     githubOrgRepos: (organizationId: number) => `${ServiceBaseUrl}/organizations/${organizationId}/github-repos`,
+    repositoryLeads: (organizationId: number) =>
+      `${ServiceBaseUrl}/organizations/${organizationId}/repository-leads`,
     defaultTeams: ServiceBaseUrl + "/default-teams",
 
     githubVerifyAndPersistUser: ServiceBaseUrl + "/github/verify-and-persist-user",

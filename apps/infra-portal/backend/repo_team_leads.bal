@@ -123,3 +123,78 @@ isolated function syncRepoTeamLeads() returns db:RepoTeamLeadSyncResult|http:Int
     }
     return {addedCount, deletedCount, updatedCount};
 }
+
+# Returns the submitted lead email when that person leads a team that has the repository.
+#
+# + organizationId - Organization id
+# + orgName - GitHub organization login
+# + repoName - Repository name
+# + leadEmail - Lead email from the request payload
+# + return - The payload email, () when no matching team has the repository, or error
+isolated function leadEmailForRepository(
+    int organizationId,
+    string orgName,
+    string repoName,
+    string leadEmail
+) returns string?|error {
+    db:RepoTeamLead[] leads = check db:getRepoTeamLeadsForAccess(organizationId, leadEmail);
+    foreach db:RepoTeamLead lead in leads {
+        boolean|error hasRepo = teamHasRepository(orgName, lead.teamSlug, repoName);
+        if hasRepo is error {
+            return hasRepo;
+        }
+        if hasRepo {
+            return leadEmail;
+        }
+    }
+    return ();
+}
+
+# Lead emails of teams in the organization that include the repository.
+#
+# + organizationId - Organization id
+# + orgName - GitHub organization login
+# + repoName - Repository name
+# + return - Distinct lead emails, or error
+isolated function leadEmailsForRepository(int organizationId, string orgName, string repoName)
+    returns string[]|error {
+    db:RepoTeamLead[] leads = check db:getRepoTeamLeadsForAccess(organizationId, ());
+    string[] emails = [];
+    map<boolean> seen = {};
+    foreach db:RepoTeamLead lead in leads {
+        string? email = lead.leadEmail;
+        if email is () || email.trim() == "" {
+            continue;
+        }
+        boolean|error hasRepo = teamHasRepository(orgName, lead.teamSlug, repoName);
+        if hasRepo is error {
+            return hasRepo;
+        }
+        if !hasRepo {
+            continue;
+        }
+        string key = email.toLowerAscii();
+        if seen.hasKey(key) {
+            continue;
+        }
+        seen[key] = true;
+        emails.push(email);
+    }
+    return emails;
+}
+
+# Whether the team includes the repository.
+#
+# + orgName - GitHub organization login
+# + teamSlug - Team slug
+# + repoName - Repository name
+# + return - true when the team has the repository, or error
+isolated function teamHasRepository(string orgName, string teamSlug, string repoName) returns boolean|error {
+    gh:TeamRepository[] repos = check gh:getTeamRepositories(orgName, teamSlug);
+    foreach gh:TeamRepository repo in repos {
+        if repo.name.equalsIgnoreCaseAscii(repoName) {
+            return true;
+        }
+    }
+    return false;
+}

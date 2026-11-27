@@ -189,7 +189,7 @@ public enum RepositoryPermission {
 
 # Body for POST /repository-access-requests.
 public type AccessRequestPayload record {|
-    # Functional lead email
+    # Repo team lead email
     string leadEmail;
     # Comma-separated CC emails (use "" if none)
     string ccList;

@@ -415,7 +415,7 @@ public type AccessRequestCreate record {|
     string email;
     # GitHub username of the requester
     string githubUsername;
-    # Functional lead email
+    # Repo team lead email
     string leadEmail;
     # Comma-separated CC emails
     string ccList;

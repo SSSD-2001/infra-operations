@@ -14,9 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 import { RouterProvider, createBrowserRouter } from "react-router-dom";
-import React from "react";
-import { View } from "@view/index";
-
 import { useEffect, useMemo, useState } from "react";
 
 import ErrorHandler from "@component/common/ErrorHandler";
@@ -46,10 +43,6 @@ const AppHandler = () => {
           children: [
             ...getActiveRoutesV2(routes, auth.roles),
             { path: "github/callback", element: <GitHubConnect /> },
-            {
-              path: "request-existing-repo-access",
-              element: React.createElement(View.requestExistingRepoAccess),
-            },
           ],
         },
       ]),

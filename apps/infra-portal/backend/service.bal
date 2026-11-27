@@ -1089,23 +1089,6 @@ service http:InterceptableService / on new http:Listener(8090) {
             };
         }
 
-
-        db:Organization|error savedOrg = db:getOrganizationByName(newOrganization.organizationName);
-        if savedOrg is error {
-            log:printError("Organization saved but could not load it for team seed", savedOrg);
-            return http:CREATED;
-        }
-        gh:GitHubTeam[]|error teams = gh:getAllTeamsForOrganization(savedOrg.organizationName);
-        if teams is error {
-            log:printWarn("Could not seed repo team leads; Sync can still add them", teams);
-            return http:CREATED;
-        }
-        foreach gh:GitHubTeam team in teams {
-            error? inserted = db:seedRepoTeamLead(savedOrg.organizationId, team.name, team.slug);
-            if inserted is error {
-                log:printWarn("Failed to seed repo team lead row", inserted, teamSlug = team.slug);
-            }
-        }
         return http:CREATED;
     }
 
@@ -2037,6 +2020,40 @@ service http:InterceptableService / on new http:Listener(8090) {
         return repos;
     }
 
+    # Lead emails for teams in the organization that include the repository.
+    #
+    # + id - Organization ID
+    # + repoName - Repository name
+    # + return - Lead emails, or Forbidden / BadRequest / InternalServerError
+    isolated resource function get organizations/[int id]/repository\-leads(
+            http:RequestContext ctx, string repoName)
+        returns string[]|http:Forbidden|http:BadRequest|http:InternalServerError {
+
+        authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
+        if userInfo is error {
+            return <http:InternalServerError>{body: {message: "User information header not found!"}};
+        }
+        if !authorization:checkPermissions([authorization:authorizedRoles.employee], userInfo.groups) {
+            return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
+        }
+        if repoName.trim() == "" {
+            return <http:BadRequest>{body: {message: "Repository name is required."}};
+        }
+
+        db:Organization|error organization = db:getOrganizationById(id);
+        if organization is error {
+            log:printError("Error while fetching organization!", organization, organizationId = id);
+            return <http:InternalServerError>{body: {message: "Error while fetching organization!"}};
+        }
+
+        string[]|error emails = leadEmailsForRepository(id, organization.organizationName, repoName);
+        if emails is error {
+            log:printError("Error while listing repository leads!", emails, repoName = repoName);
+            return <http:InternalServerError>{body: {message: "Error while listing repository leads!"}};
+        }
+        return emails;
+    }
+
     # Get default repository access status and org/repo list for the current user.
     #
     # + return - status + organizations/repos, or error
@@ -2269,11 +2286,13 @@ service http:InterceptableService / on new http:Listener(8090) {
         return membershipResult;
     }
 
-    # List access requests: own requests, or those assigned to a lead.
+    # List access requests: own requests, those assigned to a lead, or every request for an admin.
     #
     # + leadEmail - If set, return requests assigned to this lead; otherwise the caller's own requests
+    # + all - When true, an admin receives every access request
     # + return - Access requests, or Forbidden / InternalServerError
-    isolated resource function get repository\-access\-requests(http:RequestContext ctx, string? leadEmail)
+    isolated resource function get repository\-access\-requests(
+            http:RequestContext ctx, string? leadEmail, boolean all = false)
         returns db:AccessRequest[]|http:Forbidden|http:InternalServerError {
         authorization:CustomJwtPayload|error userInfo = ctx.getWithType(authorization:HEADER_USER_INFO);
         if userInfo is error {
@@ -2284,7 +2303,12 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         db:AccessRequest[]|error requests;
-        if leadEmail is string {
+        if all {
+            if !authorization:checkPermissions([authorization:authorizedRoles.admin], userInfo.groups) {
+                return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
+            }
+            requests = db:getAllAccessRequests();
+        } else if leadEmail is string {
             boolean isAdmin = authorization:checkPermissions(
                 [authorization:authorizedRoles.admin], userInfo.groups);
             if !userInfo.email.equalsIgnoreCaseAscii(leadEmail) && !isAdmin {
@@ -2314,13 +2338,17 @@ service http:InterceptableService / on new http:Listener(8090) {
         }
 
         if !authorization:checkPermissions(
-                [authorization:authorizedRoles.approver, authorization:authorizedRoles.admin], userInfo.groups) {            
-                    return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
-                }
+                [authorization:authorizedRoles.approver, authorization:authorizedRoles.admin], userInfo.groups) {
+            return <http:Forbidden>{body: {message: "Insufficient privileges!"}};
+        }
 
         db:AccessRequest|error? request = db:getAccessRequest(id);
-        if request is error { return <http:InternalServerError>{body: {message: "Error retrieving access request!"}}; }
-        if request is () { return <http:NotFound>{body: {message: "Access request not found!"}}; }
+        if request is error {
+            return <http:InternalServerError>{body: {message: "Error retrieving access request!"}};
+        }
+        if request is () {
+            return <http:NotFound>{body: {message: "Access request not found!"}};
+        }
         if request.state != db:PENDING {
             return <http:BadRequest>{body: {message: "Access request is not Pending!"}};
         }
@@ -2335,6 +2363,8 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:BadRequest>{body: {message: "Access request is not Pending!"}};
         }
 
+        // The database update and the GitHub grant are separate.
+        // Follow-up: https://github.com/wso2-open-operations/infra-operations/issues/58
         error? ghResult = gh:addRepositoryCollaborator(
             request.orgName, request.repoName, request.githubUsername, request.permission);
         if ghResult is error {
@@ -2498,38 +2528,13 @@ service http:InterceptableService / on new http:Listener(8090) {
             return <http:BadRequest>{body: {message: "Organization does not match the repository."}};
         }
 
-        db:RepoTeamLead[]|error leads = db:getRepoTeamLeads();
-        if leads is error {
-            log:printError("Error while validating repo team lead!", leads);
+        string?|error matchedLead = leadEmailForRepository(
+            payload.organizationId, organization.organizationName, payload.repoName, payload.leadEmail);
+        if matchedLead is error {
+            log:printError("Error while validating repo team lead!", matchedLead);
             return <http:InternalServerError>{body: {message: "Error while validating repo team lead!"}};
         }
-
-        string? verifiedLeadEmail = ();
-        foreach db:RepoTeamLead lead in leads {
-            if lead.organizationId != payload.organizationId {
-                continue;
-            }
-            string? candidate = lead.leadEmail;
-            if candidate is () || candidate.toLowerAscii() != payload.leadEmail.toLowerAscii() {
-                continue;
-            }
-            gh:TeamRepository[]|error teamRepos = gh:getTeamRepositories(
-                organization.organizationName, lead.teamSlug);
-            if teamRepos is error {
-                log:printError("Error while listing team repositories!", teamRepos);
-                return <http:InternalServerError>{body: {message: "Error while validating repository ownership!"}};
-            }
-            foreach gh:TeamRepository repo in teamRepos {
-                if repo.name.toLowerAscii() == payload.repoName.toLowerAscii() {
-                    verifiedLeadEmail = candidate;
-                    break;
-                }
-            }
-            if verifiedLeadEmail is string {
-                break;
-            }
-        }
-        if verifiedLeadEmail is () {
+        if matchedLead is () {
             return <http:BadRequest>{
                 body: {message: "leadEmail is not the lead of a team that has this repository."}
             };
@@ -2537,7 +2542,7 @@ service http:InterceptableService / on new http:Listener(8090) {
         db:AccessRequestCreate createPayload = {
             email: userInfo.email,
             githubUsername: githubUser.login,
-            leadEmail: verifiedLeadEmail,
+            leadEmail: matchedLead,
             ccList: payload.ccList,
             organizationId: payload.organizationId,
             orgName: payload.orgName,

@@ -121,7 +121,7 @@ export const rejectAccessRequest = createAsyncThunk<void, { id: number; comment:
 
 export const fetchAccessRequests = createAsyncThunk<
   AccessRequest[],
-  { leadEmail?: string } | void,
+  { leadEmail?: string; all?: boolean } | void,
   { rejectValue: string }
 >("accessRequest/fetchAccessRequests", async (filter, { dispatch, rejectWithValue }) => {
   try {

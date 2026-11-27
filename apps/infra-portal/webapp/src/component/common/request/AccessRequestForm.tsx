@@ -40,7 +40,6 @@ import { AppConfig } from "@config/config";
 import { APIService } from "@utils/apiService";
 import { AccessPermission, addAccessRequest } from "@slices/accessRequestSlice/accessRequest";
 import { fetchEmployees } from "@slices/employeeSlice/employee";
-import { fetchRepoTeamLeads } from "@slices/repoTeamLeadsSlice/repoTeamLeads";
 import { fetchOrganizations } from "@slices/organizationsSlice/organizations";
 import { fetchAccessRequests, AccessRequestState } from "@slices/accessRequestSlice/accessRequest";
 import { fetchDefaultRepositoryAccess } from "@slices/githubOauthAppSlice/githubOauth";
@@ -89,8 +88,6 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
         const defaultAccessStatus = useAppSelector((s) => s.githubConnect.defaultAccessStatus);
         const organizationsState = useAppSelector((s) => s.organizations);
         const employeesState = useAppSelector((state) => state.employee.employees);
-        const repoTeamLeads = useAppSelector((s) => s.repoTeamLeads.repoTeamLeads) ?? [];
-        const repoTeamLeadsState = useAppSelector((s) => s.repoTeamLeads.state);
         const submitState = useAppSelector((s) => s.accessRequest.submitState);
         const defaultAccessOrganizations = useAppSelector((s) => s.githubConnect.defaultAccessOrganizations);
         const accessRequests = useAppSelector((s) => s.accessRequest.accessRequests);
@@ -98,6 +95,8 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
         const creationRequests = useAppSelector((s) => s.repositoryRequest.repositoryRequests?.repositoryRequests) ?? [];
         const [orgRepos, setOrgRepos] = useState<string[]>([]);
         const [orgReposLoading, setOrgReposLoading] = useState(false);
+        const [repoLeads, setRepoLeads] = useState<string[]>([]);
+        const [repoLeadsLoading, setRepoLeadsLoading] = useState(false);
 
         const { isConnected } = resolveGitHubConnectionStatus(null, {
             jwtGithubUserId,
@@ -106,7 +105,6 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
   
         useEffect(() => {
             dispatch(fetchOrganizations());
-            dispatch(fetchRepoTeamLeads());
             dispatch(fetchEmployees());
             dispatch(fetchDefaultRepositoryAccess());
             dispatch(fetchAccessRequests());
@@ -234,7 +232,40 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             cancelled = true;
             };
         }, [formik.values.organizationId]);
-    ;
+
+    useEffect(() => {
+        const organizationId = formik.values.organizationId;
+        const repoName = formik.values.repoName;
+        if (!organizationId || !repoName) {
+            setRepoLeads([]);
+            setRepoLeadsLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setRepoLeadsLoading(true);
+        APIService.getInstance()
+            .get<string[]>(AppConfig.serviceUrls.repositoryLeads(organizationId), {
+                params: { repoName },
+            })
+            .then((response) => {
+                if (!cancelled) {
+                    setRepoLeads(response.data ?? []);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRepoLeads([]);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setRepoLeadsLoading(false);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [formik.values.organizationId, formik.values.repoName]);
   
     if (!isConnected) {
       return (
@@ -254,14 +285,6 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             </Alert>
         );
     }
-
-    const orgLeads = Array.from(
-        new Set(
-            repoTeamLeads
-                .filter((lead) => lead.organizationId === formik.values.organizationId && lead.leadEmail)
-                .map((lead) => lead.leadEmail as string),
-        ),
-    );
 
     return (
         <Box component="form" onSubmit={formik.handleSubmit}>
@@ -316,6 +339,7 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
             onChange={(_, value) => {
             if (value && alreadyHasAccessRepos.has(value)) return;
             formik.setFieldValue("repoName", value ?? "");
+            formik.setFieldValue("leadEmail", "");
             }}
             onBlur={() => formik.setFieldTouched("repoName", true)}
             renderInput={(params) => (
@@ -377,20 +401,20 @@ import { repoNameValidation, sanitizeEmails, sanitizeRepoName } from "@utils/uti
                 name="leadEmail"
                 value={formik.values.leadEmail}
                 onChange={formik.handleChange}
-                disabled={repoTeamLeadsState === State.loading || !formik.values.organizationId}
+                disabled={repoLeadsLoading || !formik.values.repoName}
             >
-                {repoTeamLeadsState === State.loading ? (
+                {repoLeadsLoading ? (
                     <MenuItem disabled>Loading...</MenuItem>
-                ) : !formik.values.organizationId ? (
-                    <MenuItem disabled>Select an organization first</MenuItem>
-                ) : orgLeads.length > 0 ? (
-                    orgLeads.map((email) => (
+                ) : !formik.values.repoName ? (
+                    <MenuItem disabled>Select a repository first</MenuItem>
+                ) : repoLeads.length > 0 ? (
+                    repoLeads.map((email) => (
                         <MenuItem key={email} value={email}>
                             {email}
                         </MenuItem>
                     ))
                 ) : (
-                    <MenuItem disabled>No leads available</MenuItem>
+                    <MenuItem disabled>No leads for this repository</MenuItem>
                 )}
             </Select>
             {formik.touched.leadEmail && formik.errors.leadEmail && (
